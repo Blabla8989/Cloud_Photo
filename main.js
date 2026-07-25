@@ -16,7 +16,6 @@ const app = initializeApp(firebaseConfig); const auth = getAuth(app); const db =
 function removeAccents(str) { return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); }
 document.getElementById("goToProfileBtn").onclick = () => { window.location.href = "profile.html"; };
 
-// HÀM TÍNH THỜI GIAN "xxx TRƯỚC" SIÊU NHẸ (Chỉ chạy 1 lần khi mở/render)
 function timeAgo(timestamp) {
     if (!timestamp) return 'Vừa xong';
     const diff = (new Date() - timestamp.toDate()) / 1000;
@@ -86,8 +85,10 @@ async function loadFriendList() {
         if (data.status === 'pending') {
             if (data.requesterId === currentUser.uid) badge = `<span style="font-size:0.7rem; color:#f59e0b; margin-left:auto;">Đang chờ</span>`;
             else badge = `<span style="font-size:0.7rem; color:#e60023; margin-left:auto; font-weight:bold;">Có yêu cầu</span>`;
+        } else if (data.hasUnread && data.lastSenderId !== currentUser.uid) {
+            badge = `<div style="width:10px; height:10px; background:#e60023; border-radius:50%; margin-left:auto;"></div>`;
         }
-        html += `<div class="friend-item" onclick="openChatRoom('${d.id}', '${friendName}')"><div class="friend-avatar">${friendName.charAt(0).toUpperCase()}</div><span class="friend-name">${friendName}</span>${badge}</div>`; 
+        html += `<div class="friend-item" onclick="openChatRoom('${d.id}', '${friendName}')"><div class="friend-avatar">${friendName.charAt(0).toUpperCase()}</div><span class="friend-name" style="${(data.hasUnread && data.lastSenderId !== currentUser.uid) ? 'font-weight:bold;' : ''}">${friendName}</span>${badge}</div>`; 
     });
     listEl.innerHTML = html;
 }
@@ -110,6 +111,12 @@ window.openChatRoom = (chatId, friendName) => {
     chatRoomUnsub = onSnapshot(doc(db, "friends_chat", chatId), (docSnap) => {
         const room = docSnap.data(); if (!room) return;
         chatCurrentStatus = room.status; chatCurrentRequester = room.requesterId;
+        
+        // CẬP NHẬT: Tắt cờ tin nhắn chưa đọc khi mở phòng chat
+        if (room.hasUnread && room.lastSenderId !== currentUser.uid) {
+            updateDoc(doc(db, "friends_chat", chatId), { hasUnread: false });
+        }
+
         const headerArea = document.getElementById("chatActiveUser");
         if (room.status === 'pending') {
             if (room.requesterId === currentUser.uid) { headerArea.innerHTML = `Đang chat với: ${friendName} <span style="font-size:0.8rem;color:#f59e0b;font-weight:normal;">(Chờ chấp nhận)</span>`; } 
@@ -126,7 +133,7 @@ window.openChatRoom = (chatId, friendName) => {
         const msgList = document.getElementById("chatMessages"); let html = ""; let myCount = 0;
         snap.forEach(d => { 
             const msg = d.data(), isMine = msg.senderId === currentUser.uid; if(isMine) myCount++; 
-            const timeStr = timeAgo(msg.timestamp); // GỌI HÀM TIME AGO Ở ĐÂY
+            const timeStr = timeAgo(msg.timestamp); 
             html += `<div style="display:flex; flex-direction:column; align-items: ${isMine ? 'flex-end' : 'flex-start'}; margin-bottom: 8px;">
                         <div class="chat-bubble ${isMine ? 'mine' : 'theirs'}">${msg.text}</div>
                         <span style="font-size: 0.7rem; color: var(--text-muted); margin-top: 4px; padding: 0 4px;">${timeStr}</span>
@@ -136,7 +143,15 @@ window.openChatRoom = (chatId, friendName) => {
     });
 };
 
-document.getElementById("chatSendBtn").onclick = async () => { const text = document.getElementById("chatInput").value.trim(); if(!text || !currentActiveChatId) return; document.getElementById("chatInput").value = ""; await addDoc(collection(db, "friends_chat", currentActiveChatId, "messages"), { senderId: currentUser.uid, text: text, timestamp: serverTimestamp() }); };
+// CẬP NHẬT: Phát tín hiệu có tin nhắn chưa đọc
+document.getElementById("chatSendBtn").onclick = async () => { 
+    const text = document.getElementById("chatInput").value.trim(); 
+    if(!text || !currentActiveChatId) return; 
+    document.getElementById("chatInput").value = ""; 
+    
+    await addDoc(collection(db, "friends_chat", currentActiveChatId, "messages"), { senderId: currentUser.uid, text: text, timestamp: serverTimestamp() }); 
+    await updateDoc(doc(db, "friends_chat", currentActiveChatId), { hasUnread: true, lastSenderId: currentUser.uid });
+};
 
 let unsubNoti = null;
 function listenNotifications() {
@@ -149,42 +164,39 @@ function listenNotifications() {
     });
 }
 
+// CẬP NHẬT BỘ ĐẾM: Đếm cả yêu cầu kết bạn + tin nhắn mới
 let chatNotiUnsub = null;
 function listenChatNotifications() {
     if(chatNotiUnsub) chatNotiUnsub();
     chatNotiUnsub = onSnapshot(query(collection(db, "friends_chat"), where("users", "array-contains", currentUser.uid)), (snap) => {
-        let pendingReqCount = 0; snap.forEach(d => { const data = d.data(); if (data.status === 'pending' && data.requesterId !== currentUser.uid) { pendingReqCount++; } });
+        let badgeCount = 0; 
+        snap.forEach(d => { 
+            const data = d.data(); 
+            if (data.status === 'pending' && data.requesterId !== currentUser.uid) { badgeCount++; } 
+            else if (data.status === 'accepted' && data.hasUnread && data.lastSenderId !== currentUser.uid) { badgeCount++; }
+        });
         const chatBadge = document.getElementById("chatBadge");
-        if(chatBadge) { if(pendingReqCount > 0) { chatBadge.innerText = pendingReqCount; chatBadge.style.display = "flex"; } else { chatBadge.style.display = "none"; } }
+        if(chatBadge) { 
+            if(badgeCount > 0) { chatBadge.innerText = badgeCount; chatBadge.style.display = "flex"; } 
+            else { chatBadge.style.display = "none"; } 
+        }
     });
 }
 
-document.getElementById("notiList").addEventListener('click', async (e) => { const item = e.target.closest('.noti-item'); if (item) { await updateDoc(doc(db, "notifications", item.dataset.id), { isRead: true }); notiM.classList.remove("active"); const postCard = document.querySelector(`.photo-card[data-id="${item.dataset.postId}"]`); if(postCard) postCard.click(); else showToast("Cuộn tìm ảnh hoặc vào trang chủ để xem chi tiết!", "error"); } });
+document.getElementById("notiList").addEventListener('click', async (e) => { const item = e.target.closest('.noti-item'); if (item) { await updateDoc(doc(db, "notifications", item.dataset.id), { isRead: true }); notiM.classList.remove("active"); const postCard = document.querySelector(`.photo-card[data-id="${item.dataset.postId}"]`); if(postCard) postCard.click(); else showToast("Cuộn tìm ảnh hoặc vào trang cá nhân để xem!", "error"); } });
 
-// DÀNH RIÊNG CHO MAIN.JS (Trang chủ)
 onAuthStateChanged(auth, async (user) => {
     if (user) {
-        currentUser = user; 
-        document.getElementById("unauth-section").style.display = "none"; 
-        document.getElementById("auth-section").style.display = "flex";
+        currentUser = user; document.getElementById("unauth-section").style.display = "none"; document.getElementById("auth-section").style.display = "flex";
         document.getElementById("displayUserName").innerText = user.email.split('@')[0];
-        
-        // Bắt lỗi an toàn cho Avatar trang chủ
         try {
             const userDoc = await getDoc(doc(db, "users", user.uid)); 
             document.getElementById("homeAvatar").src = (userDoc.exists() && userDoc.data().avatar) ? userDoc.data().avatar : `https://ui-avatars.com/api/?name=${user.email.split('@')[0]}&background=random&color=fff`;
-        } catch(e) {
-            document.getElementById("homeAvatar").src = `https://ui-avatars.com/api/?name=${user.email.split('@')[0]}&background=random&color=fff`;
-        }
-        
-        loginM.classList.remove("active"); // Lệnh đóng popup ở đây nè!
-        listenNotifications(); 
-        listenChatNotifications();
+        } catch(e) { document.getElementById("homeAvatar").src = `https://ui-avatars.com/api/?name=${user.email.split('@')[0]}&background=random&color=fff`; }
+        loginM.classList.remove("active"); 
+        listenNotifications(); listenChatNotifications();
     } else { 
-        // LÚC NÀY NẰM Ở TRANG CHỦ, CHƯA ĐĂNG NHẬP THÌ CHỈ ẨN MENU, KHÔNG ĐƯỢC CHUYỂN TRANG
-        currentUser = null; 
-        document.getElementById("unauth-section").style.display = "block"; 
-        document.getElementById("auth-section").style.display = "none"; 
+        currentUser = null; document.getElementById("unauth-section").style.display = "block"; document.getElementById("auth-section").style.display = "none"; 
     }
 });
 
@@ -219,35 +231,46 @@ function loadFeed() {
     });
 }
 showSkeletons(); loadFeed();
-// THUẬT TOÁN BẮT SỰ KIỆN CUỘN TRANG CHỐNG LỖI TRÊN MOBILE
-window.addEventListener('scroll', () => {
-    // Lấy tọa độ tương thích với mọi trình duyệt Mobile/Desktop
-    const scrollTop = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop;
-    const scrollHeight = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight);
-    const clientHeight = window.innerHeight || document.documentElement.clientHeight;
-    
-    // Đã lướt tới cách đáy 300px
-    if (scrollTop + clientHeight >= scrollHeight - 300 && !isFetching) { 
-        isFetching = true; 
-        postLimit += 8; 
-        loadFeed(); 
+
+// ==========================================
+// FIX LỖI CUỘN TRANG XUYÊN THẤU MỌI TRÌNH DUYỆT (CAPTURE PHASE)
+// ==========================================
+window.addEventListener('scroll', function(e) {
+    let target = e.target;
+    if (target === document) target = document.documentElement;
+    if (!target || typeof target.scrollTop === 'undefined') return;
+
+    const scrollTop = target.scrollTop || window.scrollY || 0;
+    const scrollHeight = target.scrollHeight || document.documentElement.scrollHeight || 0;
+    const clientHeight = target.clientHeight || window.innerHeight || 0;
+
+    if (scrollHeight > clientHeight && (scrollTop + clientHeight) >= (scrollHeight - 600) && !isFetching) { 
+        isFetching = true; postLimit += 8; loadFeed(); 
     } 
-});
+}, true);
+
 document.getElementById("postsGrid").addEventListener('click', async (e) => {
     if (!currentUser) return showToast("Cần đăng nhập để tương tác!", "error");
     const heartBtn = e.target.closest('.heart-btn');
     if (heartBtn) {
         const pRef = doc(db, "football_posts", heartBtn.dataset.id); const icon = heartBtn.querySelector('.lucide') || heartBtn.querySelector('svg'); const pData = (await getDoc(pRef)).data();
         if (icon) {
-            if (icon.classList.contains('icon-filled')) { updateDoc(pRef, { likedBy: arrayRemove(currentUser.uid) }); icon.classList.remove('icon-filled'); if(pData.userId !== currentUser.uid) deleteDoc(doc(db, "notifications", `like_${heartBtn.dataset.id}_${currentUser.uid}`)); } 
-            else { updateDoc(pRef, { likedBy: arrayUnion(currentUser.uid) }); icon.classList.add('icon-filled'); if(pData.userId !== currentUser.uid) setDoc(doc(db, "notifications", `like_${heartBtn.dataset.id}_${currentUser.uid}`), { userId: pData.userId, fromUserId: currentUser.uid, fromUserName: currentUser.email.split('@')[0], type: 'like', postId: heartBtn.dataset.id, postImage: pData.image_url, timestamp: serverTimestamp(), isRead: false }); }
+            if (icon.classList.contains('icon-filled')) { 
+                updateDoc(pRef, { likedBy: arrayRemove(currentUser.uid) }); icon.classList.remove('icon-filled'); 
+                logSecurityAction(currentUser.uid, "UNLIKE_POST", `Đã gỡ tim bài viết ID: ${heartBtn.dataset.id}`);
+                if(pData.userId !== currentUser.uid) deleteDoc(doc(db, "notifications", `like_${heartBtn.dataset.id}_${currentUser.uid}`)); 
+            } else { 
+                updateDoc(pRef, { likedBy: arrayUnion(currentUser.uid) }); icon.classList.add('icon-filled'); 
+                logSecurityAction(currentUser.uid, "LIKE_POST", `Đã thả tim bài viết ID: ${heartBtn.dataset.id}`);
+                if(pData.userId !== currentUser.uid) setDoc(doc(db, "notifications", `like_${heartBtn.dataset.id}_${currentUser.uid}`), { userId: pData.userId, fromUserId: currentUser.uid, fromUserName: currentUser.email.split('@')[0], type: 'like', postId: heartBtn.dataset.id, postImage: pData.image_url, timestamp: serverTimestamp(), isRead: false }); 
+            }
         } return;
     }
     const saveBtn = e.target.closest('.save-btn'); if (saveBtn) { currentInteractPostId = saveBtn.dataset.id; boardM.classList.add("active"); loadBoards(); return; }
     
     const card = e.target.closest('.photo-card');
     if (card) {
-        currentInteractPostId = card.dataset.id; detailM.classList.add("active"); replyingToCommentId = null; 
+        currentInteractPostId = card.dataset.id; detailM.classList.add("active"); replyingToCommentId = null;
         currentPostData = (await getDoc(doc(db, "football_posts", currentInteractPostId))).data();
         
         const addFriendBtn = document.getElementById("addFriendBtn");
@@ -287,9 +310,11 @@ document.getElementById("postsGrid").addEventListener('click', async (e) => {
             const pRef = doc(db, "football_posts", currentInteractPostId); 
             if (detailHeartBtn.classList.contains('liked')) { 
                 await updateDoc(pRef, { likedBy: arrayRemove(currentUser.uid) }); detailHeartBtn.classList.remove('liked'); document.getElementById("detailLikes").innerText = parseInt(document.getElementById("detailLikes").innerText) - 1; 
+                logSecurityAction(currentUser.uid, "UNLIKE_POST", `Đã gỡ tim bài viết ID: ${currentInteractPostId}`);
                 if(currentPostData.userId !== currentUser.uid) await deleteDoc(doc(db, "notifications", `like_${currentInteractPostId}_${currentUser.uid}`));
             } else { 
                 await updateDoc(pRef, { likedBy: arrayUnion(currentUser.uid) }); detailHeartBtn.classList.add('liked'); document.getElementById("detailLikes").innerText = parseInt(document.getElementById("detailLikes").innerText) + 1; 
+                logSecurityAction(currentUser.uid, "LIKE_POST", `Đã thả tim bài viết ID: ${currentInteractPostId}`);
                 if(currentPostData.userId !== currentUser.uid) await setDoc(doc(db, "notifications", `like_${currentInteractPostId}_${currentUser.uid}`), { userId: currentPostData.userId, fromUserId: currentUser.uid, fromUserName: currentUser.email.split('@')[0], type: 'like', postId: currentInteractPostId, postImage: currentPostData.image_url, timestamp: serverTimestamp(), isRead: false }); 
             } 
         };
@@ -300,7 +325,7 @@ document.getElementById("postsGrid").addEventListener('click', async (e) => {
 
 document.getElementById("detailDownloadBtn").onclick = () => {
     showToast("Đang chuẩn bị ảnh bản quyền...", "success"); const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d'); const img = new Image(); img.crossOrigin = "Anonymous"; img.src = currentPostData.image_url;
-    img.onload = () => { canvas.width = img.width; canvas.height = img.height; ctx.drawImage(img, 0, 0); ctx.fillStyle = "rgba(0, 0, 0, 0.6)"; ctx.fillRect(0, img.height - 60, img.width, 60); ctx.fillStyle = "#ffffff"; ctx.font = "bold 24px Inter, sans-serif"; ctx.fillText(`FootyNet © Tác giả: ${currentPostData.userName}`, 20, img.height - 22); const link = document.createElement('a'); link.download = `FootyNet_${currentPostData.userName}_${Date.now()}.png`; link.href = canvas.toDataURL("image/png"); link.click(); showToast("Tải ảnh thành công!"); }; img.onerror = () => showToast("Lỗi bảo mật CORS từ máy chủ ảnh!", "error");
+    img.onload = () => { canvas.width = img.width; canvas.height = img.height; ctx.drawImage(img, 0, 0); ctx.fillStyle = "rgba(0, 0, 0, 0.6)"; ctx.fillRect(0, img.height - 60, img.width, 60); ctx.fillStyle = "#ffffff"; ctx.font = "bold 24px Inter, sans-serif"; ctx.fillText(`FootyNet © Tác giả: ${currentPostData.userName}`, 20, img.height - 22); const link = document.createElement('a'); link.download = `FootyNet_${Date.now()}.png`; link.href = canvas.toDataURL("image/png"); link.click(); showToast("Tải thành công!"); }; img.onerror = () => showToast("Lỗi CORS máy chủ ảnh!", "error");
 };
 async function loadBoards() { const list = document.getElementById("boardList"); const snap = await getDocs(query(collection(db, "boards"), where("userId", "==", currentUser.uid))); list.innerHTML = snap.empty ? "<p class='text-muted'>Chưa có bảng.</p>" : ""; snap.forEach(d => list.innerHTML += `<div style="display:flex; justify-content:space-between; align-items:center; padding:12px; border:1px solid var(--border-color); border-radius:12px; margin-bottom:10px;"><strong>${d.data().name}</strong><button class="btn small-btn btn-glass" onclick="saveToBoard('${d.id}')">Lưu</button></div>`); }
 document.getElementById("createBoardBtn").onclick = async () => { const n = document.getElementById("newBoardInput").value; if(!n)return; const r = await addDoc(collection(db, "boards"), { name: n, userId: currentUser.uid, timestamp: serverTimestamp() }); saveToBoard(r.id); document.getElementById("newBoardInput").value = ""; };
@@ -308,9 +333,9 @@ window.saveToBoard = async (bId) => {
     const checkSnap = await getDocs(query(collection(db, "saved_pins"), where("boardId", "==", bId), where("postId", "==", currentInteractPostId))); 
     if (!checkSnap.empty) { showToast("Ảnh này đã có trong bộ sưu tập!", "error"); boardM.classList.remove("active"); return; } 
     await addDoc(collection(db, "saved_pins"), { boardId: bId, postId: currentInteractPostId, userId: currentUser.uid, timestamp: serverTimestamp() }); boardM.classList.remove("active"); showToast("Đã lưu thành công!"); 
+    logSecurityAction(currentUser.uid, "SAVE_POST", `Đã lưu bài viết ID: ${currentInteractPostId} vào bộ sưu tập`);
 };
 
-// RENDER BÌNH LUẬN KÈM TÍNH THỜI GIAN "xxx TRƯỚC"
 let unsub = null;
 function loadDetailComments(pId) {
     const list = document.getElementById("detailCommentList"); if (unsub) unsub();
@@ -319,12 +344,12 @@ function loadDetailComments(pId) {
         let commentsMap = {}; snap.forEach(d => { commentsMap[d.id] = { id: d.id, ...d.data() }; }); let html = "";
         
         Object.values(commentsMap).filter(c => !c.replyTo).forEach(c => {
-            const timeStr = timeAgo(c.timestamp); // GỌI HÀM TIME AGO Ở ĐÂY
+            const timeStr = timeAgo(c.timestamp);
             const isLiked = (c.likedBy || []).includes(currentUser?.uid); const delBtnHTML = (currentUser && c.userId === currentUser.uid) ? `<button class="delete-comment-btn" data-id="${c.id}" title="Xóa"><i data-lucide="trash-2" style="width:14px; height:14px;"></i></button>` : '';
             html += `<div class="comment-item" id="comment-${c.id}"><div class="comment-text-content"><strong>${c.userName}</strong><span style="font-size:0.75rem; color:var(--text-muted); margin-left:8px; font-weight:normal;">${timeStr}</span><p>${c.text}</p><div class="comment-actions"><span class="comment-action-btn ${isLiked?'liked':''}" data-action="like-comment" data-id="${c.id}"><i data-lucide="heart" style="width:12px;"></i> ${(c.likedBy||[]).length||0}</span><span class="comment-action-btn" data-action="reply-comment" data-id="${c.id}" data-name="${c.userName}"><i data-lucide="reply" style="width:12px;"></i> Trả lời</span></div></div>${delBtnHTML}</div>`;
             
             Object.values(commentsMap).filter(r => r.replyTo === c.id).forEach(r => {
-                const rTimeStr = timeAgo(r.timestamp); // GỌI HÀM TIME AGO CHO REPLY
+                const rTimeStr = timeAgo(r.timestamp);
                 const rIsLiked = (r.likedBy || []).includes(currentUser?.uid); const rDelBtnHTML = (currentUser && r.userId === currentUser.uid) ? `<button class="delete-comment-btn" data-id="${r.id}" title="Xóa"><i data-lucide="trash-2" style="width:14px; height:14px;"></i></button>` : '';
                 html += `<div class="comment-item reply-item" id="comment-${r.id}"><div class="comment-text-content"><strong>${r.userName}</strong><span style="font-size:0.75rem; color:var(--text-muted); margin-left:8px; font-weight:normal;">${rTimeStr}</span><p>${r.text}</p><div class="comment-actions"><span class="comment-action-btn ${rIsLiked?'liked':''}" data-action="like-comment" data-id="${r.id}"><i data-lucide="heart" style="width:12px;"></i> ${(r.likedBy||[]).length||0}</span></div></div>${rDelBtnHTML}</div>`;
             });
@@ -336,14 +361,24 @@ function loadDetailComments(pId) {
 document.getElementById("detailCommentList").addEventListener('click', async (e) => {
     if (!currentUser) return showToast("Cần đăng nhập để tương tác!", "error");
     const delBtn = e.target.closest('.delete-comment-btn'); 
-    if (delBtn) { showConfirm("Xóa bình luận này?", async () => { await deleteDoc(doc(db, "football_posts", currentInteractPostId, "comments", delBtn.dataset.id)); showToast("Đã xóa!"); }); return; }
-    
+    if (delBtn) { 
+        showConfirm("Xóa bình luận này?", async () => { 
+            await deleteDoc(doc(db, "football_posts", currentInteractPostId, "comments", delBtn.dataset.id)); showToast("Đã xóa!"); 
+            logSecurityAction(currentUser.uid, "DELETE_COMMENT", `Đã xóa bình luận trong bài viết ID: ${currentInteractPostId}`);
+        }); return; 
+    }
     const actionBtn = e.target.closest('.comment-action-btn');
     if (actionBtn) {
         const cId = actionBtn.dataset.id;
         if (actionBtn.dataset.action === "like-comment") {
             const cRef = doc(db, "football_posts", currentInteractPostId, "comments", cId); const cDoc = await getDoc(cRef);
-            if ((cDoc.data().likedBy||[]).includes(currentUser.uid)) { await updateDoc(cRef, { likedBy: arrayRemove(currentUser.uid) }); } else { await updateDoc(cRef, { likedBy: arrayUnion(currentUser.uid) }); }
+            if ((cDoc.data().likedBy||[]).includes(currentUser.uid)) { 
+                await updateDoc(cRef, { likedBy: arrayRemove(currentUser.uid) }); 
+                logSecurityAction(currentUser.uid, "UNLIKE_COMMENT", `Đã gỡ tim bình luận ID: ${cId}`);
+            } else { 
+                await updateDoc(cRef, { likedBy: arrayUnion(currentUser.uid) }); 
+                logSecurityAction(currentUser.uid, "LIKE_COMMENT", `Đã thả tim bình luận ID: ${cId}`);
+            }
         } else if (actionBtn.dataset.action === "reply-comment") { replyingToCommentId = cId; const input = document.getElementById("detailCommentInput"); input.value = `@${actionBtn.dataset.name} `; input.focus(); }
     }
 });
@@ -352,5 +387,6 @@ document.getElementById("detailSubmitCommentBtn").onclick = async () => {
     const t = document.getElementById("detailCommentInput").value; if(!t)return; document.getElementById("detailCommentInput").value = ""; 
     await addDoc(collection(db, "football_posts", currentInteractPostId, "comments"), { text: t, userName: currentUser.email.split('@')[0], userId: currentUser.uid, replyTo: replyingToCommentId, timestamp: serverTimestamp() }); 
     replyingToCommentId = null; 
+    logSecurityAction(currentUser.uid, "ADD_COMMENT", `Đã bình luận vào bài viết ID: ${currentInteractPostId}`);
     if(currentPostData && currentPostData.userId !== currentUser.uid) { await addDoc(collection(db, "notifications"), { userId: currentPostData.userId, fromUserId: currentUser.uid, fromUserName: currentUser.email.split('@')[0], type: 'comment', postId: currentInteractPostId, postImage: currentPostData.image_url, timestamp: serverTimestamp(), isRead: false }); }
 };
