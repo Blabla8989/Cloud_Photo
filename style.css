@@ -259,26 +259,39 @@ html, body {
 }
 
 /* =========================================
-   GIAO DIỆN CON TRỎ CHUỘT TỐI GIẢN MỚI
+   GIAO DIỆN CON TRỎ CHUỘT TỐI GIẢN MỚI (ĐÃ FIX TÀNG HÌNH)
 ========================================= */
-body { cursor: none !important; }
-#cursorOutline { display: none !important; } /* Tiêu diệt vòng tròn to rối mắt */
+/* Giấu chuột hệ thống đi trên máy tính */
+@media screen and (min-width: 769px) {
+    body { cursor: none !important; }
+}
+
+#cursorOutline { display: none !important; } /* Diệt cái vòng tròn to */
 
 #cursorDot {
+    position: fixed !important; /* QUAN TRỌNG: Để chuột di chuyển được theo màn hình */
     width: 10px !important;
     height: 10px !important;
     background-color: var(--primary-color) !important;
     border: 2px solid var(--primary-color) !important;
-    transition: width 0.2s ease, height 0.2s ease, background-color 0.2s ease, border-radius 0.2s ease, transform 0.2s ease !important;
-    z-index: 99999 !important;
-    pointer-events: none !important;
+    border-radius: 50% !important; /* Bình thường là hình tròn */
+    transform: translate(-50%, -50%) !important; /* Căn giữa chính xác tâm chuột */
+    transition: width 0.2s ease, height 0.2s ease, background-color 0.2s ease, border-radius 0.2s ease !important;
+    z-index: 999999 !important; /* Nổi lên trên mọi thứ */
+    pointer-events: none !important; /* Xuyên thấu để không cản trở click */
 }
 
-/* Biến hình khi rê chuột vào nút bấm */
+/* Biến hình khi rê chuột vào các phần bấm được */
 #cursorDot.hover-active {
-    width: 32px !important;
-    height: 32px !important;
+    width: 36px !important;
+    height: 36px !important;
     background-color: transparent !important;
-    border-radius: 8px !important; /* Hình vuông bo góc xịn xò */
-    transform: translate(-50%, -50%) scale(1.1) !important;
+    border: 2px solid var(--primary-color) !important;
+    border-radius: 8px !important; /* Biến thành hình vuông bo góc xịn xò */
+}
+
+/* Trả lại chuột hệ thống và tắt hiệu ứng nếu dùng điện thoại/tablet */
+@media screen and (max-width: 768px) {
+    body { cursor: auto !important; }
+    #cursorDot { display: none !important; }
 }
