@@ -257,3 +257,28 @@ html, body {
         margin-bottom: 10px;
     }
 }
+
+/* =========================================
+   GIAO DIỆN CON TRỎ CHUỘT TỐI GIẢN MỚI
+========================================= */
+body { cursor: none !important; }
+#cursorOutline { display: none !important; } /* Tiêu diệt vòng tròn to rối mắt */
+
+#cursorDot {
+    width: 10px !important;
+    height: 10px !important;
+    background-color: var(--primary-color) !important;
+    border: 2px solid var(--primary-color) !important;
+    transition: width 0.2s ease, height 0.2s ease, background-color 0.2s ease, border-radius 0.2s ease, transform 0.2s ease !important;
+    z-index: 99999 !important;
+    pointer-events: none !important;
+}
+
+/* Biến hình khi rê chuột vào nút bấm */
+#cursorDot.hover-active {
+    width: 32px !important;
+    height: 32px !important;
+    background-color: transparent !important;
+    border-radius: 8px !important; /* Hình vuông bo góc xịn xò */
+    transform: translate(-50%, -50%) scale(1.1) !important;
+}

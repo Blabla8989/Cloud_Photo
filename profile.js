@@ -33,8 +33,15 @@ if (currentTheme === "dark") document.documentElement.setAttribute("data-theme",
 themeBtn.innerHTML = currentTheme === "dark" ? '<i data-lucide="sun"></i>' : '<i data-lucide="moon"></i>';
 themeBtn.onclick = () => { const theme = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark"; document.documentElement.setAttribute("data-theme", theme); localStorage.setItem("theme", theme); themeBtn.innerHTML = theme === "dark" ? '<i data-lucide="sun"></i>' : '<i data-lucide="moon"></i>'; lucide.createIcons(); };
 
-lucide.createIcons(); const dot = document.getElementById("cursorDot"), outline = document.getElementById("cursorOutline");
-window.addEventListener('mousemove', (e) => { dot.style.left = `${e.clientX}px`; dot.style.top = `${e.clientY}px`; outline.animate({ left: `${e.clientX}px`, top: `${e.clientY}px` }, { duration: 300, fill: "forwards" }); });
+lucide.createIcons(); 
+
+// LOGIC CON TRỎ CHUỘT MỚI
+const dot = document.getElementById("cursorDot");
+const outline = document.getElementById("cursorOutline"); if(outline) outline.style.display = "none";
+window.addEventListener('mousemove', (e) => { dot.style.left = `${e.clientX}px`; dot.style.top = `${e.clientY}px`; });
+const clickables = 'button, a, .photo-card, input, .lucide, .close-modal, .user-profile, .noti-item, .notification-wrapper, .upload-preview-area, #detailImageContainer, .friend-item, .comment-action-btn, .tab-btn, .board-folder';
+document.addEventListener('mouseover', (e) => { if(e.target.closest(clickables)) dot.classList.add('hover-active'); });
+document.addEventListener('mouseout', (e) => { if(e.target.closest(clickables)) dot.classList.remove('hover-active'); });
 
 document.getElementById("detailCommentInput").addEventListener('keydown', e => { if(e.key === 'Enter') document.getElementById("detailSubmitCommentBtn").click(); });
 document.getElementById("chatInput").addEventListener('keydown', e => { if(e.key === 'Enter') document.getElementById("chatSendBtn").click(); });
@@ -79,15 +86,24 @@ function updateChatState() {
     } else { inputArea.style.display = 'flex'; chatInput.disabled = false; chatInput.placeholder = "Nhắn tin..."; chatSendBtn.disabled = false; }
 }
 
-window.openChatRoom = (chatId, friendName) => {
+window.openChatRoom = async (chatId, friendName) => {
     currentActiveChatId = chatId; document.getElementById("chatWindow").style.display = "flex"; 
+    
+    const rDoc = await getDoc(doc(db, "friends_chat", chatId));
+    if(rDoc.exists() && rDoc.data().hasUnread && rDoc.data().lastSenderId !== currentUser.uid) {
+        await updateDoc(doc(db, "friends_chat", chatId), { hasUnread: false });
+    }
     
     if(chatRoomUnsub) chatRoomUnsub();
     chatRoomUnsub = onSnapshot(doc(db, "friends_chat", chatId), (docSnap) => {
         const room = docSnap.data(); if (!room) return;
         chatCurrentStatus = room.status; chatCurrentRequester = room.requesterId;
         
-        if (room.hasUnread && room.lastSenderId !== currentUser.uid) { updateDoc(doc(db, "friends_chat", chatId), { hasUnread: false }); }
+        if (room.hasUnread && room.lastSenderId !== currentUser.uid) { 
+            if(chatM.classList.contains("active") && currentActiveChatId === chatId) {
+                updateDoc(doc(db, "friends_chat", chatId), { hasUnread: false }); 
+            }
+        }
 
         const headerArea = document.getElementById("chatActiveUser");
         if (room.status === 'pending') {
@@ -123,9 +139,6 @@ document.getElementById("chatSendBtn").onclick = async () => {
     await updateDoc(doc(db, "friends_chat", currentActiveChatId), { hasUnread: true, lastSenderId: currentUser.uid, lastUpdated: serverTimestamp() });
 };
 
-// ==============================================================
-// BỘ QUẢN LÝ TIN NHẮN REAL-TIME (SẮP XẾP LÊN TOP & CHUÔNG ĐỎ)
-// ==============================================================
 let chatNotiUnsub = null;
 function listenChatNotifications() {
     if(chatNotiUnsub) chatNotiUnsub();
@@ -139,7 +152,6 @@ function listenChatNotifications() {
             else if (data.status === 'accepted' && data.hasUnread && data.lastSenderId !== currentUser.uid) { badgeCount++; }
         });
 
-        // TỰ ĐỘNG CẤY THÔNG BÁO VÀO NÚT CHAT BÊN NGOÀI
         let chatBadge = document.getElementById("chatBadge");
         if(!chatBadge) {
             const chatBtn = document.getElementById("chatBtn");
@@ -150,7 +162,6 @@ function listenChatNotifications() {
             else { chatBadge.style.display = "none"; }
         }
 
-        // SẮP XẾP LẠI DANH SÁCH BẠN BÈ (TIN MỚI NHẤT LÊN ĐẦU)
         friendsArray.sort((a, b) => {
             const timeA = (a.lastUpdated || a.createdAt)?.toMillis() || 0;
             const timeB = (b.lastUpdated || b.createdAt)?.toMillis() || 0;
@@ -191,7 +202,7 @@ function listenNotifications() {
     });
 }
 
-document.getElementById("notiList").addEventListener('click', async (e) => { const item = e.target.closest('.noti-item'); if (item) { await updateDoc(doc(db, "notifications", item.dataset.id), { isRead: true }); notiM.classList.remove("active"); const postCard = document.querySelector(`.photo-card[data-id="${item.dataset.postId}"]`); if(postCard) postCard.click(); else showToast("Cuộn tìm ảnh hoặc vào trang chủ để xem chi tiết!", "error"); } });
+document.getElementById("notiList").addEventListener('click', async (e) => { const item = e.target.closest('.noti-item'); if (item) { await updateDoc(doc(db, "notifications", item.dataset.id), { isRead: true }); notiM.classList.remove("active"); const postCard = document.querySelector(`.photo-card[data-id="${item.dataset.postId}"]`); if(postCard) postCard.click(); else showToast("Cuộn tìm ảnh hoặc vào trang cá nhân để xem!", "error"); } });
 
 onAuthStateChanged(auth, async (user) => {
     if (user) {
@@ -260,7 +271,7 @@ window.addEventListener('scroll', function(e) {
     const clientHeight = target.clientHeight || window.innerHeight || 0;
 
     if (scrollHeight > clientHeight && (scrollTop + clientHeight) >= (scrollHeight - 600) && !isFetching) { 
-        // Logic cuộn tải thêm không dùng ở trang profile
+        // Lướt ở profile
     } 
 }, true);
 

@@ -35,8 +35,14 @@ themeBtn.innerHTML = currentTheme === "dark" ? '<i data-lucide="sun"></i>' : '<i
 themeBtn.onclick = () => { const theme = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark"; document.documentElement.setAttribute("data-theme", theme); localStorage.setItem("theme", theme); themeBtn.innerHTML = theme === "dark" ? '<i data-lucide="sun"></i>' : '<i data-lucide="moon"></i>'; lucide.createIcons(); };
 
 lucide.createIcons();
-const dot = document.getElementById("cursorDot"), outline = document.getElementById("cursorOutline");
-window.addEventListener('mousemove', (e) => { dot.style.left = `${e.clientX}px`; dot.style.top = `${e.clientY}px`; outline.animate({ left: `${e.clientX}px`, top: `${e.clientY}px` }, { duration: 300, fill: "forwards" }); });
+
+// LOGIC CON TRỎ CHUỘT MỚI
+const dot = document.getElementById("cursorDot");
+const outline = document.getElementById("cursorOutline"); if(outline) outline.style.display = "none";
+window.addEventListener('mousemove', (e) => { dot.style.left = `${e.clientX}px`; dot.style.top = `${e.clientY}px`; });
+const clickables = 'button, a, .photo-card, input, .lucide, .close-modal, .user-profile, .noti-item, .notification-wrapper, .upload-preview-area, #detailImageContainer, .friend-item, .comment-action-btn, .tab-btn, .board-folder';
+document.addEventListener('mouseover', (e) => { if(e.target.closest(clickables)) dot.classList.add('hover-active'); });
+document.addEventListener('mouseout', (e) => { if(e.target.closest(clickables)) dot.classList.remove('hover-active'); });
 
 document.getElementById("passwordInput").addEventListener('keydown', e => { if(e.key === 'Enter') document.getElementById("loginSubmitBtn").click(); });
 document.getElementById("emailInput").addEventListener('keydown', e => { if(e.key === 'Enter') document.getElementById("loginSubmitBtn").click(); });
@@ -52,7 +58,7 @@ document.getElementById("showLoginBtn").onclick = () => loginM.classList.add("ac
 document.getElementById("showUploadBtn").onclick = () => uploadM.classList.add("active"); document.getElementById("closeBoard").onclick = () => boardM.classList.remove("active"); 
 document.getElementById("notiBellBtn").onclick = () => notiM.classList.add("active"); document.getElementById("closeNoti").onclick = () => notiM.classList.remove("active");
 document.getElementById("closeChat").onclick = () => chatM.classList.remove("active"); 
-document.getElementById("chatBtn").onclick = () => { chatM.classList.add("active"); }; // Không cần load thủ công nữa
+document.getElementById("chatBtn").onclick = () => { chatM.classList.add("active"); }; 
 
 document.getElementById("closePostDetail").onclick = () => { detailM.classList.remove("active"); document.querySelector('.post-detail-content').style.boxShadow = ''; };
 document.getElementById("closeUpload").onclick = () => { uploadM.classList.remove("active"); document.getElementById("imageInput").value = ""; document.getElementById("captionInput").value = ""; document.getElementById("imagePreview").style.display = "none"; document.getElementById("uploadPlaceholder").style.display = "flex"; };
@@ -85,16 +91,26 @@ function updateChatState() {
     } else { inputArea.style.display = 'flex'; chatInput.disabled = false; chatInput.placeholder = "Nhắn tin..."; chatSendBtn.disabled = false; }
 }
 
-window.openChatRoom = (chatId, friendName) => {
+window.openChatRoom = async (chatId, friendName) => {
     currentActiveChatId = chatId; document.getElementById("chatWindow").style.display = "flex"; 
+    
+    // Ép xóa cờ chưa đọc khi vừa click vào
+    const rDoc = await getDoc(doc(db, "friends_chat", chatId));
+    if(rDoc.exists() && rDoc.data().hasUnread && rDoc.data().lastSenderId !== currentUser.uid) {
+        await updateDoc(doc(db, "friends_chat", chatId), { hasUnread: false });
+    }
     
     if(chatRoomUnsub) chatRoomUnsub();
     chatRoomUnsub = onSnapshot(doc(db, "friends_chat", chatId), (docSnap) => {
         const room = docSnap.data(); if (!room) return;
         chatCurrentStatus = room.status; chatCurrentRequester = room.requesterId;
         
-        // Tắt cờ tin nhắn chưa đọc
-        if (room.hasUnread && room.lastSenderId !== currentUser.uid) { updateDoc(doc(db, "friends_chat", chatId), { hasUnread: false }); }
+        // FIX LỖI: Chỉ xóa thông báo nếu khung Chat ĐANG ĐƯỢC MỞ
+        if (room.hasUnread && room.lastSenderId !== currentUser.uid) { 
+            if(chatM.classList.contains("active") && currentActiveChatId === chatId) {
+                updateDoc(doc(db, "friends_chat", chatId), { hasUnread: false }); 
+            }
+        }
 
         const headerArea = document.getElementById("chatActiveUser");
         if (room.status === 'pending') {
@@ -130,9 +146,6 @@ document.getElementById("chatSendBtn").onclick = async () => {
     await updateDoc(doc(db, "friends_chat", currentActiveChatId), { hasUnread: true, lastSenderId: currentUser.uid, lastUpdated: serverTimestamp() });
 };
 
-// ==============================================================
-// BỘ QUẢN LÝ TIN NHẮN REAL-TIME (SẮP XẾP LÊN TOP & CHUÔNG ĐỎ)
-// ==============================================================
 let chatNotiUnsub = null;
 function listenChatNotifications() {
     if(chatNotiUnsub) chatNotiUnsub();
@@ -146,7 +159,6 @@ function listenChatNotifications() {
             else if (data.status === 'accepted' && data.hasUnread && data.lastSenderId !== currentUser.uid) { badgeCount++; }
         });
 
-        // 1. TỰ ĐỘNG CẤY THÔNG BÁO VÀO NÚT CHAT BÊN NGOÀI
         let chatBadge = document.getElementById("chatBadge");
         if(!chatBadge) {
             const chatBtn = document.getElementById("chatBtn");
@@ -157,7 +169,7 @@ function listenChatNotifications() {
             else { chatBadge.style.display = "none"; }
         }
 
-        // 2. SẮP XẾP LẠI DANH SÁCH BẠN BÈ (TIN MỚI NHẤT LÊN ĐẦU)
+        // SẮP XẾP TIN MỚI NHẤT LÊN ĐẦU
         friendsArray.sort((a, b) => {
             const timeA = (a.lastUpdated || a.createdAt)?.toMillis() || 0;
             const timeB = (b.lastUpdated || b.createdAt)?.toMillis() || 0;
@@ -198,7 +210,7 @@ function listenNotifications() {
     });
 }
 
-document.getElementById("notiList").addEventListener('click', async (e) => { const item = e.target.closest('.noti-item'); if (item) { await updateDoc(doc(db, "notifications", item.dataset.id), { isRead: true }); notiM.classList.remove("active"); const postCard = document.querySelector(`.photo-card[data-id="${item.dataset.postId}"]`); if(postCard) postCard.click(); else showToast("Cuộn tìm ảnh để xem!", "error"); } });
+document.getElementById("notiList").addEventListener('click', async (e) => { const item = e.target.closest('.noti-item'); if (item) { await updateDoc(doc(db, "notifications", item.dataset.id), { isRead: true }); notiM.classList.remove("active"); const postCard = document.querySelector(`.photo-card[data-id="${item.dataset.postId}"]`); if(postCard) postCard.click(); else showToast("Cuộn tìm ảnh hoặc vào trang cá nhân để xem!", "error"); } });
 
 onAuthStateChanged(auth, async (user) => {
     if (user) {
@@ -303,7 +315,7 @@ document.getElementById("postsGrid").addEventListener('click', async (e) => {
                 addFriendBtn.innerHTML = `<i data-lucide="user-plus" style="width:14px;"></i> Kết bạn`;
                 addFriendBtn.onclick = async () => { 
                     await setDoc(doc(db, "friends_chat", chatId), { users: [currentUser.uid, currentPostData.userId], userNames: { [currentUser.uid]: currentUser.email.split('@')[0], [currentPostData.userId]: currentPostData.userName }, status: 'pending', requesterId: currentUser.uid, createdAt: serverTimestamp(), lastUpdated: serverTimestamp() }); 
-                    addFriendBtn.innerHTML = `<i data-lucide="clock" style="width:14px;"></i> Đã gửi yêu cầu`; showToast("Đã gửi yêu cầu kết bạn!"); await logSecurityAction(currentUser.uid, "ADD_FRIEND", `Gửi yêu cầu kết bạn`);
+                    addFriendBtn.innerHTML = `<i data-lucide="clock" style="width:14px;"></i> Đã gửi yêu cầu`; showToast("Đã gửi yêu cầu kết bạn!"); await logSecurityAction(currentUser.uid, "ADD_FRIEND", `Gửi yêu cầu kết bạn tới ${currentPostData.userName}`);
                 };
             }
         } else { addFriendBtn.style.display = "none"; }
@@ -376,7 +388,7 @@ document.getElementById("detailCommentList").addEventListener('click', async (e)
     if (delBtn) { 
         showConfirm("Xóa bình luận này?", async () => { 
             await deleteDoc(doc(db, "football_posts", currentInteractPostId, "comments", delBtn.dataset.id)); showToast("Đã xóa!"); 
-            logSecurityAction(currentUser.uid, "DELETE_COMMENT", `Đã xóa bình luận`);
+            logSecurityAction(currentUser.uid, "DELETE_COMMENT", `Đã xóa bình luận trong bài viết ID: ${currentInteractPostId}`);
         }); return; 
     }
     const actionBtn = e.target.closest('.comment-action-btn');
@@ -384,7 +396,13 @@ document.getElementById("detailCommentList").addEventListener('click', async (e)
         const cId = actionBtn.dataset.id;
         if (actionBtn.dataset.action === "like-comment") {
             const cRef = doc(db, "football_posts", currentInteractPostId, "comments", cId); const cDoc = await getDoc(cRef);
-            if ((cDoc.data().likedBy||[]).includes(currentUser.uid)) { await updateDoc(cRef, { likedBy: arrayRemove(currentUser.uid) }); } else { await updateDoc(cRef, { likedBy: arrayUnion(currentUser.uid) }); }
+            if ((cDoc.data().likedBy||[]).includes(currentUser.uid)) { 
+                await updateDoc(cRef, { likedBy: arrayRemove(currentUser.uid) }); 
+                logSecurityAction(currentUser.uid, "UNLIKE_COMMENT", `Đã gỡ tim bình luận ID: ${cId}`);
+            } else { 
+                await updateDoc(cRef, { likedBy: arrayUnion(currentUser.uid) }); 
+                logSecurityAction(currentUser.uid, "LIKE_COMMENT", `Đã thả tim bình luận ID: ${cId}`);
+            }
         } else if (actionBtn.dataset.action === "reply-comment") { replyingToCommentId = cId; const input = document.getElementById("detailCommentInput"); input.value = `@${actionBtn.dataset.name} `; input.focus(); }
     }
 });
@@ -393,5 +411,6 @@ document.getElementById("detailSubmitCommentBtn").onclick = async () => {
     const t = document.getElementById("detailCommentInput").value; if(!t)return; document.getElementById("detailCommentInput").value = ""; 
     await addDoc(collection(db, "football_posts", currentInteractPostId, "comments"), { text: t, userName: currentUser.email.split('@')[0], userId: currentUser.uid, replyTo: replyingToCommentId, timestamp: serverTimestamp() }); 
     replyingToCommentId = null; 
+    logSecurityAction(currentUser.uid, "ADD_COMMENT", `Đã bình luận vào bài viết ID: ${currentInteractPostId}`);
     if(currentPostData && currentPostData.userId !== currentUser.uid) { await addDoc(collection(db, "notifications"), { userId: currentPostData.userId, fromUserId: currentUser.uid, fromUserName: currentUser.email.split('@')[0], type: 'comment', postId: currentInteractPostId, postImage: currentPostData.image_url, timestamp: serverTimestamp(), isRead: false }); }
 };
