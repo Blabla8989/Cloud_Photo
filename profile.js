@@ -156,10 +156,24 @@ document.getElementById("notiList").addEventListener('click', async (e) => { con
 
 onAuthStateChanged(auth, async (user) => {
     if (user) {
-        currentUser = user; document.getElementById("displayUserName").innerText = user.email.split('@')[0]; document.getElementById("profileName").innerText = user.email.split('@')[0]; document.getElementById("profileEmail").innerText = user.email;
-        const userDoc = await getDoc(doc(db, "users", user.uid)); document.getElementById("profileAvatar").src = (userDoc.exists() && userDoc.data().avatar) ? userDoc.data().avatar : `https://ui-avatars.com/api/?name=${user.email.split('@')[0]}&background=random&color=fff`;
+        currentUser = user; 
+        document.getElementById("displayUserName").innerText = user.email.split('@')[0]; 
+        document.getElementById("profileName").innerText = user.email.split('@')[0]; 
+        document.getElementById("profileEmail").innerText = user.email;
+        
+        // Dùng try-catch để chống đứng hình web
+        try {
+            const userDoc = await getDoc(doc(db, "users", user.uid)); 
+            document.getElementById("profileAvatar").src = (userDoc.exists() && userDoc.data().avatar) ? userDoc.data().avatar : `https://ui-avatars.com/api/?name=${user.email.split('@')[0]}&background=random&color=fff`;
+            document.getElementById("profileBio").innerText = (userDoc.exists() && userDoc.data().bio) ? userDoc.data().bio : "Chưa có tiểu sử."; 
+        } catch (error) {
+            document.getElementById("profileAvatar").src = `https://ui-avatars.com/api/?name=${user.email.split('@')[0]}&background=random&color=fff`;
+            document.getElementById("profileBio").innerText = "Chưa có tiểu sử.";
+        }
+        
         document.querySelector('.tab-btn[data-tab="my-posts"]').click(); 
-        listenNotifications(); listenChatNotifications();
+        listenNotifications(); 
+        listenChatNotifications();
     } else { window.location.href = "index.html"; } 
 });
 document.getElementById("logoutBtn").onclick = () => signOut(auth);

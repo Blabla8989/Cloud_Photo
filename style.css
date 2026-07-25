@@ -207,3 +207,53 @@ body.hovering .cursor-outline { width: 50px; height: 50px; background-color: rgb
 .friend-item:hover, .friend-item.active { background: var(--hover-bg); }
 .friend-avatar { width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, #e60023, #ff4d4d); color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 1.1rem; }
 .friend-name { font-weight: 600; color: var(--text-main); }
+
+/* =========================================
+   SỬA LỖI GIAO DIỆN ĐIỆN THOẠI (RESPONSIVE)
+========================================= */
+html, body {
+    overflow-x: hidden; /* Cấm tuyệt đối trượt ngang */
+    width: 100vw;
+    max-width: 100%;
+}
+
+@media screen and (max-width: 768px) {
+    /* Đập đi xây lại thanh Menu cho vừa điện thoại */
+    .top-nav {
+        flex-wrap: wrap;
+        padding: 10px 15px;
+        gap: 10px;
+        height: auto;
+    }
+    
+    /* Đẩy ô tìm kiếm xuống dòng dưới cho rộng rãi */
+    .search-bar {
+        order: 3;
+        width: 100%;
+        margin-top: 5px;
+    }
+    
+    .nav-actions {
+        flex: 1;
+        justify-content: flex-end;
+    }
+    
+    /* Ẩn bớt tên người dùng trên Mobile cho đỡ chật */
+    .user-name-tag {
+        display: none !important;
+    }
+    
+    /* Chia lưới ảnh làm 2 cột trên điện thoại (thay vì 4-5 cột) */
+    .masonry-grid {
+        column-count: 2;
+        column-gap: 10px;
+        padding: 10px;
+        width: 100%;
+        box-sizing: border-box;
+    }
+    
+    .photo-card-wrap {
+        width: 100%;
+        margin-bottom: 10px;
+    }
+}

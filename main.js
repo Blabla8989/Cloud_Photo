@@ -163,11 +163,25 @@ document.getElementById("notiList").addEventListener('click', async (e) => { con
 
 onAuthStateChanged(auth, async (user) => {
     if (user) {
-        currentUser = user; document.getElementById("unauth-section").style.display = "none"; document.getElementById("auth-section").style.display = "flex";
-        document.getElementById("displayUserName").innerText = user.email.split('@')[0];
-        const userDoc = await getDoc(doc(db, "users", user.uid)); document.getElementById("homeAvatar").src = (userDoc.exists() && userDoc.data().avatar) ? userDoc.data().avatar : `https://ui-avatars.com/api/?name=${user.email.split('@')[0]}&background=random&color=fff`;
-        loginM.classList.remove("active"); listenNotifications(); listenChatNotifications();
-    } else { currentUser = null; document.getElementById("unauth-section").style.display = "block"; document.getElementById("auth-section").style.display = "none"; }
+        currentUser = user; 
+        document.getElementById("displayUserName").innerText = user.email.split('@')[0]; 
+        document.getElementById("profileName").innerText = user.email.split('@')[0]; 
+        document.getElementById("profileEmail").innerText = user.email;
+        
+        // Dùng try-catch để chống đứng hình web
+        try {
+            const userDoc = await getDoc(doc(db, "users", user.uid)); 
+            document.getElementById("profileAvatar").src = (userDoc.exists() && userDoc.data().avatar) ? userDoc.data().avatar : `https://ui-avatars.com/api/?name=${user.email.split('@')[0]}&background=random&color=fff`;
+            document.getElementById("profileBio").innerText = (userDoc.exists() && userDoc.data().bio) ? userDoc.data().bio : "Chưa có tiểu sử."; 
+        } catch (error) {
+            document.getElementById("profileAvatar").src = `https://ui-avatars.com/api/?name=${user.email.split('@')[0]}&background=random&color=fff`;
+            document.getElementById("profileBio").innerText = "Chưa có tiểu sử.";
+        }
+        
+        document.querySelector('.tab-btn[data-tab="my-posts"]').click(); 
+        listenNotifications(); 
+        listenChatNotifications();
+    } else { window.location.href = "index.html"; } 
 });
 
 document.getElementById("registerSubmitBtn").onclick = async () => { try { const res = await createUserWithEmailAndPassword(auth, document.getElementById("emailInput").value, document.getElementById("passwordInput").value); await logSecurityAction(res.user.uid, "REGISTER", `Đăng ký tài khoản mới: ${res.user.email}`); showToast("Tạo tài khoản thành công!"); } catch(e) { showToast("Lỗi đăng ký!", "error"); } };
@@ -201,8 +215,20 @@ function loadFeed() {
     });
 }
 showSkeletons(); loadFeed();
-window.addEventListener('scroll', () => { const scrollable = document.documentElement.scrollHeight - window.innerHeight; if (window.scrollY >= scrollable - 200 && !isFetching) { isFetching = true; postLimit += 8; loadFeed(); } });
-
+// THUẬT TOÁN BẮT SỰ KIỆN CUỘN TRANG CHỐNG LỖI TRÊN MOBILE
+window.addEventListener('scroll', () => {
+    // Lấy tọa độ tương thích với mọi trình duyệt Mobile/Desktop
+    const scrollTop = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop;
+    const scrollHeight = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight);
+    const clientHeight = window.innerHeight || document.documentElement.clientHeight;
+    
+    // Đã lướt tới cách đáy 300px
+    if (scrollTop + clientHeight >= scrollHeight - 300 && !isFetching) { 
+        isFetching = true; 
+        postLimit += 8; 
+        loadFeed(); 
+    } 
+});
 document.getElementById("postsGrid").addEventListener('click', async (e) => {
     if (!currentUser) return showToast("Cần đăng nhập để tương tác!", "error");
     const heartBtn = e.target.closest('.heart-btn');
