@@ -15,12 +15,45 @@
 * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; cursor: none !important; }
 body { background-color: var(--bg-main); color: var(--text-main); overflow-x: hidden; transition: background-color 0.3s, color 0.3s; }
 
-/* CUSTOM CURSOR */
-.cursor-dot { width: 8px; height: 8px; background: #e60023; position: fixed; top: 0; left: 0; transform: translate(-50%, -50%); border-radius: 50%; z-index: 9999; pointer-events: none; transition: transform 0.1s; }
-.cursor-outline { width: 36px; height: 36px; border: 2px solid rgba(230,0,35,0.4); position: fixed; top: 0; left: 0; transform: translate(-50%, -50%); border-radius: 50%; z-index: 9998; pointer-events: none; transition: width 0.2s, height 0.2s, background-color 0.2s; }
-body.hovering .cursor-dot { transform: translate(-50%, -50%) scale(0.5); }
-body.hovering .cursor-outline { width: 50px; height: 50px; background-color: rgba(230,0,35,0.1); border-color: transparent; }
+/* =========================================
+   GIAO DIỆN CON TRỎ CHUỘT TỐI GIẢN MỚI
+========================================= */
+/* Giấu chuột hệ thống đi trên máy tính */
+@media screen and (min-width: 769px) {
+    body { cursor: none !important; }
+}
 
+/* Tiêu diệt triệt để cái vòng tròn to */
+.cursor-outline { display: none !important; } 
+
+/* Giao diện chấm nhỏ mặc định */
+.cursor-dot {
+    position: fixed !important; 
+    width: 10px !important;
+    height: 10px !important;
+    background-color: #e60023 !important; /* Màu đỏ chủ đạo */
+    border: 2px solid #e60023 !important;
+    border-radius: 50% !important; /* Hình tròn */
+    transform: translate(-50%, -50%) !important; 
+    transition: width 0.2s ease, height 0.2s ease, background-color 0.2s ease, border-radius 0.2s ease !important;
+    z-index: 999999 !important; 
+    pointer-events: none !important; 
+}
+
+/* Biến hình thành ô vuông bo góc khi rê chuột vào nút bấm */
+body.hovering .cursor-dot, .cursor-dot.hover-active {
+    width: 36px !important;
+    height: 36px !important;
+    background-color: transparent !important;
+    border: 2px solid #e60023 !important;
+    border-radius: 8px !important; /* Vuông bo góc xịn xò */
+}
+
+/* Trả lại chuột hệ thống và giấu chấm đỏ nếu lướt bằng điện thoại/tablet */
+@media screen and (max-width: 768px) {
+    body { cursor: auto !important; }
+    .cursor-dot { display: none !important; }
+}
 /* NAVBAR & SEARCH */
 .glass-effect { background: var(--glass-bg); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border-color); }
 .top-nav { display: flex; align-items: center; justify-content: space-between; padding: 14px 24px; position: sticky; top: 0; z-index: 100; }
