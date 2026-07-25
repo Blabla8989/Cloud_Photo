@@ -154,6 +154,7 @@ function listenChatNotifications() {
 
 document.getElementById("notiList").addEventListener('click', async (e) => { const item = e.target.closest('.noti-item'); if (item) { await updateDoc(doc(db, "notifications", item.dataset.id), { isRead: true }); notiM.classList.remove("active"); const postCard = document.querySelector(`.photo-card[data-id="${item.dataset.postId}"]`); if(postCard) postCard.click(); else showToast("Cuộn tìm ảnh hoặc vào trang chủ để xem chi tiết!", "error"); } });
 
+// DÀNH RIÊNG CHO PROFILE.JS (Trang cá nhân)
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         currentUser = user; 
@@ -161,7 +162,7 @@ onAuthStateChanged(auth, async (user) => {
         document.getElementById("profileName").innerText = user.email.split('@')[0]; 
         document.getElementById("profileEmail").innerText = user.email;
         
-        // Dùng try-catch để chống đứng hình web
+        // Bắt lỗi an toàn cho Avatar và Tiểu sử
         try {
             const userDoc = await getDoc(doc(db, "users", user.uid)); 
             document.getElementById("profileAvatar").src = (userDoc.exists() && userDoc.data().avatar) ? userDoc.data().avatar : `https://ui-avatars.com/api/?name=${user.email.split('@')[0]}&background=random&color=fff`;
@@ -174,7 +175,10 @@ onAuthStateChanged(auth, async (user) => {
         document.querySelector('.tab-btn[data-tab="my-posts"]').click(); 
         listenNotifications(); 
         listenChatNotifications();
-    } else { window.location.href = "index.html"; } 
+    } else { 
+        // Ở TRANG CÁ NHÂN MÀ CHƯA ĐĂNG NHẬP THÌ ĐÁ VĂNG RA TRANG CHỦ
+        window.location.href = "index.html"; 
+    } 
 });
 document.getElementById("logoutBtn").onclick = () => signOut(auth);
 

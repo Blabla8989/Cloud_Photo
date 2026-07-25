@@ -161,27 +161,31 @@ function listenChatNotifications() {
 
 document.getElementById("notiList").addEventListener('click', async (e) => { const item = e.target.closest('.noti-item'); if (item) { await updateDoc(doc(db, "notifications", item.dataset.id), { isRead: true }); notiM.classList.remove("active"); const postCard = document.querySelector(`.photo-card[data-id="${item.dataset.postId}"]`); if(postCard) postCard.click(); else showToast("Cuộn tìm ảnh hoặc vào trang chủ để xem chi tiết!", "error"); } });
 
+// DÀNH RIÊNG CHO MAIN.JS (Trang chủ)
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         currentUser = user; 
-        document.getElementById("displayUserName").innerText = user.email.split('@')[0]; 
-        document.getElementById("profileName").innerText = user.email.split('@')[0]; 
-        document.getElementById("profileEmail").innerText = user.email;
+        document.getElementById("unauth-section").style.display = "none"; 
+        document.getElementById("auth-section").style.display = "flex";
+        document.getElementById("displayUserName").innerText = user.email.split('@')[0];
         
-        // Dùng try-catch để chống đứng hình web
+        // Bắt lỗi an toàn cho Avatar trang chủ
         try {
             const userDoc = await getDoc(doc(db, "users", user.uid)); 
-            document.getElementById("profileAvatar").src = (userDoc.exists() && userDoc.data().avatar) ? userDoc.data().avatar : `https://ui-avatars.com/api/?name=${user.email.split('@')[0]}&background=random&color=fff`;
-            document.getElementById("profileBio").innerText = (userDoc.exists() && userDoc.data().bio) ? userDoc.data().bio : "Chưa có tiểu sử."; 
-        } catch (error) {
-            document.getElementById("profileAvatar").src = `https://ui-avatars.com/api/?name=${user.email.split('@')[0]}&background=random&color=fff`;
-            document.getElementById("profileBio").innerText = "Chưa có tiểu sử.";
+            document.getElementById("homeAvatar").src = (userDoc.exists() && userDoc.data().avatar) ? userDoc.data().avatar : `https://ui-avatars.com/api/?name=${user.email.split('@')[0]}&background=random&color=fff`;
+        } catch(e) {
+            document.getElementById("homeAvatar").src = `https://ui-avatars.com/api/?name=${user.email.split('@')[0]}&background=random&color=fff`;
         }
         
-        document.querySelector('.tab-btn[data-tab="my-posts"]').click(); 
+        loginM.classList.remove("active"); // Lệnh đóng popup ở đây nè!
         listenNotifications(); 
         listenChatNotifications();
-    } else { window.location.href = "index.html"; } 
+    } else { 
+        // LÚC NÀY NẰM Ở TRANG CHỦ, CHƯA ĐĂNG NHẬP THÌ CHỈ ẨN MENU, KHÔNG ĐƯỢC CHUYỂN TRANG
+        currentUser = null; 
+        document.getElementById("unauth-section").style.display = "block"; 
+        document.getElementById("auth-section").style.display = "none"; 
+    }
 });
 
 document.getElementById("registerSubmitBtn").onclick = async () => { try { const res = await createUserWithEmailAndPassword(auth, document.getElementById("emailInput").value, document.getElementById("passwordInput").value); await logSecurityAction(res.user.uid, "REGISTER", `Đăng ký tài khoản mới: ${res.user.email}`); showToast("Tạo tài khoản thành công!"); } catch(e) { showToast("Lỗi đăng ký!", "error"); } };
