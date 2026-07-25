@@ -65,7 +65,34 @@
     </div>
 
     <div class="modal-overlay" id="notiModal"><div class="modal-content" style="padding: 0; max-height: 80vh; overflow: hidden; display: flex; flex-direction: column; max-width: 500px;"><div style="padding: 20px 24px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;"><h2 style="margin: 0; font-size: 1.3rem;">Thông báo</h2><span class="close-modal" id="closeNoti" style="position: static;"><i data-lucide="x"></i></span></div><div id="notiList" style="flex: 1; overflow-y: auto;"></div></div></div>
-    <div class="modal-overlay" id="loginModal"><div class="modal-content"><span class="close-modal" id="closeLogin"><i data-lucide="x"></i></span><h2>Tham gia</h2><input type="email" id="emailInput" placeholder="Email" class="input-field"><input type="password" id="passwordInput" placeholder="Mật khẩu" class="input-field"><button class="btn btn-primary" id="loginSubmitBtn">Đăng nhập</button><button class="btn btn-outline" id="registerSubmitBtn">Tạo tài khoản</button></div></div>
+    <!-- BẢNG ĐĂNG NHẬP / ĐĂNG KÝ MỚI -->
+<div class="modal" id="loginModal">
+    <div class="modal-content">
+        <button class="close-modal" id="closeLogin"><i data-lucide="x"></i></button>
+        
+        <!-- KHU VỰC 1: FORM ĐĂNG NHẬP -->
+        <div id="loginFormArea">
+            <h2 style="margin-bottom: 20px; text-align: center; color: var(--text-main);">Đăng nhập FootyNet</h2>
+            <input type="email" id="emailInput" class="input-field" placeholder="Email của bạn" style="margin-bottom: 12px;">
+            <input type="password" id="passwordInput" class="input-field" placeholder="Mật khẩu" style="margin-bottom: 20px;">
+            <button id="loginSubmitBtn" class="btn btn-primary" style="width: 100%; margin-bottom: 15px; font-size: 1rem;">Đăng nhập</button>
+            <p style="text-align: center; font-size: 0.95rem; color: var(--text-muted);">
+                Chưa có tài khoản? <span id="switchToRegister" style="color: #e60023; cursor: pointer; font-weight: bold; transition: 0.2s;">Tạo ngay</span>
+            </p>
+        </div>
+
+        <!-- KHU VỰC 2: FORM ĐĂNG KÝ (Mặc định ẩn) -->
+        <div id="registerFormArea" style="display: none;">
+            <h2 style="margin-bottom: 20px; text-align: center; color: var(--text-main);">Tạo tài khoản mới</h2>
+            <input type="email" id="regEmailInput" class="input-field" placeholder="Nhập địa chỉ Email" style="margin-bottom: 12px;">
+            <input type="password" id="regPasswordInput" class="input-field" placeholder="Mật khẩu (tối thiểu 6 ký tự)" style="margin-bottom: 20px;">
+            <button id="registerSubmitBtn" class="btn btn-primary" style="width: 100%; margin-bottom: 15px; font-size: 1rem;">Xác nhận Đăng ký</button>
+            <p style="text-align: center; font-size: 0.95rem; color: var(--text-muted);">
+                Đã có tài khoản? <span id="switchToLogin" style="color: #e60023; cursor: pointer; font-weight: bold; transition: 0.2s;">Đăng nhập</span>
+            </p>
+        </div>
+    </div>
+</div>
     <div class="modal-overlay" id="uploadModal"><div class="modal-content" style="max-width: 450px;"><span class="close-modal" id="closeUpload"><i data-lucide="x"></i></span><h2 style="margin-bottom: 15px;">Tạo Ghim</h2><label for="imageInput" class="upload-preview-area" id="uploadPreviewArea"><div class="upload-placeholder" id="uploadPlaceholder"><i data-lucide="upload-cloud" style="width: 48px; height: 48px;"></i><span style="font-weight: 500;">Bấm để chọn ảnh</span></div><img id="imagePreview" class="upload-preview-img" alt="Preview"></label><input type="file" id="imageInput" accept="image/*" class="hidden-file-input"><textarea id="captionInput" placeholder="Mô tả khoảnh khắc (Dùng #Hashtag để phân loại)..." class="input-field caption-area" style="height: 90px;"></textarea><button class="btn btn-primary" id="postBtn" style="width: 100%; margin-top: 10px;">Đăng Bài</button></div></div>
     <div class="modal-overlay" id="boardModal"><div class="modal-content"><span class="close-modal" id="closeBoard"><i data-lucide="x"></i></span><h2>Lưu vào bảng</h2><div id="boardList" class="board-list" style="margin-bottom:15px; max-height:200px; overflow-y:auto;"></div><input type="text" id="newBoardInput" placeholder="Tên bảng mới" class="input-field"><button class="btn btn-primary" id="createBoardBtn" style="margin-top:10px;">Tạo bảng mới</button></div></div>
     

@@ -290,3 +290,119 @@ body.hovering #cursorDot, body.hovering .cursor-dot {
     body, a, button, input, textarea, .photo-card { cursor: auto !important; }
     #cursorDot, .cursor-dot { display: none !important; }
 }
+
+/* =========================================
+   FIX LỖI: ÉP BUỘC HIỆN CHUÔNG THÔNG BÁO BÊN NGOÀI MENU
+========================================= */
+#chatBtn, .notification-wrapper {
+    position: relative !important;
+    overflow: visible !important; /* Rất quan trọng: Không được cắt lẹm phần thừa ra */
+}
+
+#chatBadge {
+    position: absolute !important;
+    top: -6px !important;
+    right: -6px !important;
+    background-color: #e60023 !important;
+    color: #ffffff !important;
+    font-size: 11px !important;
+    font-weight: bold !important;
+    width: 22px !important;
+    height: 22px !important;
+    border-radius: 50% !important;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    border: 2px solid var(--bg-main) !important;
+    z-index: 9999 !important;
+}
+
+/* =========================================
+   TÂN TRANG LẠI GIAO DIỆN PHÒNG CHAT CHO XỊN XÒ
+========================================= */
+/* Mở rộng khung chat to ra một chút */
+#chatModal > div {
+    padding: 20px !important; 
+    max-width: 750px !important; 
+}
+
+/* Đóng khung toàn bộ phòng chat */
+.chat-layout { 
+    display: flex; 
+    height: 65vh; 
+    min-height: 450px; 
+    background: var(--bg-main); 
+    border-radius: 12px !important; 
+    overflow: hidden; 
+    border: 1px solid var(--border-color) !important;
+    margin-top: 15px;
+}
+
+/* Cột danh sách bạn bè bên trái */
+.chat-sidebar { 
+    width: 35%; 
+    min-width: 180px;
+    border-right: 1px solid var(--border-color) !important; 
+    overflow-y: auto; 
+    background: var(--bg-card) !important; 
+}
+
+/* Khu vực nhắn tin bên phải */
+.chat-main { 
+    flex: 1; 
+    display: flex; 
+    flex-direction: column; 
+    background: var(--bg-main) !important; 
+}
+
+/* Thanh Header ghi chữ "Đang chat với..." */
+#chatActiveUser { 
+    padding: 16px 20px !important; 
+    background: var(--bg-card) !important; 
+    border-bottom: 1px solid var(--border-color) !important; 
+    font-weight: 600 !important;
+    font-size: 1.1rem !important;
+    color: var(--text-main);
+}
+
+/* Khu vực gõ tin nhắn ở dưới cùng */
+.chat-input-area {
+    padding: 15px !important;
+    background: var(--bg-card) !important;
+    border-top: 1px solid var(--border-color) !important;
+}
+
+/* =========================================
+   FIX LỖI Z-INDEX: POPUP LƯU BẢNG NỔI LÊN TRÊN
+========================================= */
+#boardModal { 
+    z-index: 4000 !important; 
+}
+#confirmModal { 
+    z-index: 5000 !important; 
+}
+
+/* =========================================
+   FIX LỖI CHUÔNG TIN NHẮN TÀNG HÌNH BÊN NGOÀI
+========================================= */
+#chatBtn { 
+    position: relative !important; 
+    overflow: visible !important; /* Mở khóa để chuông không bị cắt lẹm */
+}
+
+#chatBadge {
+    position: absolute !important;
+    top: -5px !important;
+    right: -5px !important;
+    background-color: #e60023 !important;
+    color: #ffffff !important;
+    font-size: 11px !important;
+    font-weight: bold !important;
+    width: 20px !important;
+    height: 20px !important;
+    border-radius: 50% !important;
+    justify-content: center !important;
+    align-items: center !important;
+    border: 2px solid var(--bg-main) !important;
+    z-index: 9999 !important;
+}

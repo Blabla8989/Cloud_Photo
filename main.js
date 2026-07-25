@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
 import { getFirestore, collection, onSnapshot, query, orderBy, doc, updateDoc, arrayUnion, arrayRemove, addDoc, getDocs, where, serverTimestamp, getDoc, setDoc, deleteDoc, limit } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
 const firebaseConfig = {  
@@ -94,7 +94,6 @@ function updateChatState() {
 window.openChatRoom = async (chatId, friendName) => {
     currentActiveChatId = chatId; document.getElementById("chatWindow").style.display = "flex"; 
     
-    // Ép xóa cờ chưa đọc khi vừa click vào
     const rDoc = await getDoc(doc(db, "friends_chat", chatId));
     if(rDoc.exists() && rDoc.data().hasUnread && rDoc.data().lastSenderId !== currentUser.uid) {
         await updateDoc(doc(db, "friends_chat", chatId), { hasUnread: false });
@@ -105,7 +104,6 @@ window.openChatRoom = async (chatId, friendName) => {
         const room = docSnap.data(); if (!room) return;
         chatCurrentStatus = room.status; chatCurrentRequester = room.requesterId;
         
-        // FIX LỖI: Chỉ xóa thông báo nếu khung Chat ĐANG ĐƯỢC MỞ
         if (room.hasUnread && room.lastSenderId !== currentUser.uid) { 
             if(chatM.classList.contains("active") && currentActiveChatId === chatId) {
                 updateDoc(doc(db, "friends_chat", chatId), { hasUnread: false }); 
@@ -132,7 +130,7 @@ window.openChatRoom = async (chatId, friendName) => {
             html += `<div style="display:flex; flex-direction:column; align-items: ${isMine ? 'flex-end' : 'flex-start'}; margin-bottom: 8px;">
                         <div class="chat-bubble ${isMine ? 'mine' : 'theirs'}">${msg.text}</div>
                         <span style="font-size: 0.7rem; color: var(--text-muted); margin-top: 4px; padding: 0 4px;">${timeStr}</span>
-                     </div>`; 
+                   </div>`; 
         });
         msgList.innerHTML = html; msgList.scrollTop = msgList.scrollHeight; chatMyMsgCount = myCount; updateChatState(); 
     });
@@ -162,14 +160,21 @@ function listenChatNotifications() {
         let chatBadge = document.getElementById("chatBadge");
         if(!chatBadge) {
             const chatBtn = document.getElementById("chatBtn");
-            if(chatBtn) { chatBadge = document.createElement("span"); chatBadge.id = "chatBadge"; chatBadge.className = "noti-badge"; chatBadge.style.display = "none"; chatBtn.appendChild(chatBadge); }
+            if(chatBtn) { 
+                chatBadge = document.createElement("span"); 
+                chatBadge.id = "chatBadge"; 
+                chatBtn.appendChild(chatBadge); 
+            }
         }
         if(chatBadge) {
-            if(badgeCount > 0) { chatBadge.innerText = badgeCount; chatBadge.style.display = "flex"; } 
-            else { chatBadge.style.display = "none"; }
+            if(badgeCount > 0) { 
+                chatBadge.innerText = badgeCount; 
+                chatBadge.style.setProperty("display", "flex", "important"); 
+            } else { 
+                chatBadge.style.setProperty("display", "none", "important"); 
+            }
         }
 
-        // SẮP XẾP TIN MỚI NHẤT LÊN ĐẦU
         friendsArray.sort((a, b) => {
             const timeA = (a.lastUpdated || a.createdAt)?.toMillis() || 0;
             const timeB = (b.lastUpdated || b.createdAt)?.toMillis() || 0;
@@ -183,7 +188,7 @@ function listenChatNotifications() {
                 let html = "";
                 friendsArray.forEach(data => {
                     const friendId = data.users.find(id => id !== currentUser.uid);
-                    const friendName = data.userNames[friendId]; 
+                    const friendName = data.userNames[friendId] || "Người dùng"; 
                     let badge = '';
                     if (data.status === 'pending') {
                         if (data.requesterId === currentUser.uid) badge = `<span style="font-size:0.7rem; color:#f59e0b; margin-left:auto;">Đang chờ</span>`;
@@ -191,7 +196,7 @@ function listenChatNotifications() {
                     } else if (data.hasUnread && data.lastSenderId !== currentUser.uid) {
                         badge = `<div style="width:10px; height:10px; background:#e60023; border-radius:50%; margin-left:auto;"></div>`;
                     }
-                    html += `<div class="friend-item ${currentActiveChatId === data.id ? 'active' : ''}" style="${currentActiveChatId === data.id ? 'background: var(--hover-bg);' : ''}" onclick="openChatRoom('${data.id}', '${friendName}')"><div class="friend-avatar">${friendName.charAt(0).toUpperCase()}</div><span class="friend-name" style="${(data.hasUnread && data.lastSenderId !== currentUser.uid) ? 'font-weight:bold;' : ''}">${friendName}</span>${badge}</div>`;
+                    html += `<div class="friend-item ${currentActiveChatId === data.id ? 'active' : ''}" onclick="openChatRoom('${data.id}', '${friendName}')"><div class="friend-avatar">${friendName.charAt(0).toUpperCase()}</div><span class="friend-name" style="${(data.hasUnread && data.lastSenderId !== currentUser.uid) ? 'font-weight:bold;' : ''}">${friendName}</span>${badge}</div>`;
                 });
                 listEl.innerHTML = html;
             }
@@ -202,15 +207,42 @@ function listenChatNotifications() {
 let unsubNoti = null;
 function listenNotifications() {
     if(unsubNoti) unsubNoti();
-    unsubNoti = onSnapshot(query(collection(db, "notifications"), where("userId", "==", currentUser.uid), orderBy("timestamp", "desc")), (snap) => {
+    unsubNoti = onSnapshot(query(collection(db, "notifications"), where("receiverId", "==", currentUser.uid), orderBy("createdAt", "desc")), (snap) => {
         const notiList = document.getElementById("notiList"), notiBadge = document.getElementById("notiBadge"); let unreadCount = 0, html = "";
         if (snap.empty) { notiList.innerHTML = "<p class='text-muted' style='text-align:center; padding: 30px;'>Không có thông báo nào.</p>"; notiBadge.style.display = "none"; return; }
-        snap.forEach(docSnap => { const n = docSnap.data(); if (!n.isRead) unreadCount++; const text = n.type === 'like' ? 'đã thả tim bài viết ❤️' : 'đã bình luận về bài viết 💬'; const timeStr = timeAgo(n.timestamp); html += `<div class="noti-item ${n.isRead ? '' : 'unread'}" data-id="${docSnap.id}" data-post-id="${n.postId}"><img src="${n.postImage}"><div class="noti-item-content"><strong>${n.fromUserName}</strong> ${text}<span class="noti-time">${timeStr}</span></div></div>`; });
-        notiList.innerHTML = html; if(unreadCount > 0) { notiBadge.innerText = unreadCount; notiBadge.style.display = "flex"; } else { notiBadge.style.display = "none"; }
+        
+        snap.forEach(docSnap => { 
+            const n = docSnap.data(); 
+            if (!n.isRead) unreadCount++; 
+            
+            let actionText = "";
+            if (n.type === 'like') actionText = "đã thả tim bài viết của bạn ❤️";
+            else if (n.type === 'comment') actionText = "đã bình luận về bài viết 💬";
+            else if (n.type === 'like_comment') actionText = "đã thả tim bình luận của bạn ❤️";
+            else if (n.type === 'reply_comment') actionText = "đã trả lời bình luận của bạn ↪️";
+            else if (n.type === 'mention') actionText = `đã nhắc đến bạn: "${n.content}" 📣`;
+
+            const timeStr = timeAgo(n.createdAt); 
+            html += `<div class="noti-item ${n.isRead ? '' : 'unread'}" data-id="${docSnap.id}" data-post-id="${n.postId}">
+                        <div class="noti-item-content"><strong>${n.senderName}</strong> ${actionText}<span class="noti-time">${timeStr}</span></div>
+                     </div>`; 
+        });
+        notiList.innerHTML = html; 
+        if(unreadCount > 0) { notiBadge.innerText = unreadCount; notiBadge.style.display = "flex"; } 
+        else { notiBadge.style.display = "none"; }
     });
 }
 
-document.getElementById("notiList").addEventListener('click', async (e) => { const item = e.target.closest('.noti-item'); if (item) { await updateDoc(doc(db, "notifications", item.dataset.id), { isRead: true }); notiM.classList.remove("active"); const postCard = document.querySelector(`.photo-card[data-id="${item.dataset.postId}"]`); if(postCard) postCard.click(); else showToast("Cuộn tìm ảnh hoặc vào trang cá nhân để xem!", "error"); } });
+document.getElementById("notiList").addEventListener('click', async (e) => { 
+    const item = e.target.closest('.noti-item'); 
+    if (item) { 
+        await updateDoc(doc(db, "notifications", item.dataset.id), { isRead: true }); 
+        notiM.classList.remove("active"); 
+        const postCard = document.querySelector(`.photo-card[data-id="${item.dataset.postId}"]`); 
+        if(postCard) postCard.click(); 
+        else showToast("Cuộn tìm ảnh hoặc vào trang cá nhân để xem!", "error"); 
+    } 
+});
 
 onAuthStateChanged(auth, async (user) => {
     if (user) {
@@ -227,8 +259,81 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
-document.getElementById("registerSubmitBtn").onclick = async () => { try { const res = await createUserWithEmailAndPassword(auth, document.getElementById("emailInput").value, document.getElementById("passwordInput").value); await logSecurityAction(res.user.uid, "REGISTER", `Đăng ký tài khoản mới: ${res.user.email}`); showToast("Tạo tài khoản thành công!"); } catch(e) { showToast("Lỗi đăng ký!", "error"); } };
-document.getElementById("loginSubmitBtn").onclick = async () => { try { const res = await signInWithEmailAndPassword(auth, document.getElementById("emailInput").value, document.getElementById("passwordInput").value); await logSecurityAction(res.user.uid, "LOGIN", `Đăng nhập hệ thống`); showToast("Đăng nhập thành công!"); } catch(e) { showToast("Sai thông tin!", "error"); } };
+// ==========================================
+// XỬ LÝ CHUYỂN ĐỔI GIAO DIỆN ĐĂNG NHẬP/ĐĂNG KÝ
+// ==========================================
+const loginFormArea = document.getElementById("loginFormArea");
+const registerFormArea = document.getElementById("registerFormArea");
+
+document.getElementById("switchToRegister").onclick = () => {
+    loginFormArea.style.display = "none";
+    registerFormArea.style.display = "block";
+};
+document.getElementById("switchToLogin").onclick = () => {
+    registerFormArea.style.display = "none";
+    loginFormArea.style.display = "block";
+};
+
+// ==========================================
+// LUỒNG ĐĂNG KÝ & ĐĂNG NHẬP BẢO MẬT
+// ==========================================
+let isRegistering = false;
+
+document.getElementById("registerSubmitBtn").onclick = async () => { 
+    const email = document.getElementById("regEmailInput").value.trim();
+    const pass = document.getElementById("regPasswordInput").value.trim();
+    if(!email || !pass) return showToast("Vui lòng nhập đủ thông tin!", "error");
+    
+    document.getElementById("registerSubmitBtn").innerText = "Đang xử lý...";
+    isRegistering = true;
+
+    try { 
+        // 1. Tạo tài khoản trên Database
+        const res = await createUserWithEmailAndPassword(auth, email, pass); 
+        await logSecurityAction(res.user.uid, "REGISTER", `Đăng ký tài khoản mới: ${res.user.email}`); 
+        
+        // Lưu thông tin người dùng vào collection users để hỗ trợ tìm kiếm @mention
+        await setDoc(doc(db, "users", res.user.uid), {
+            username: email.split('@')[0],
+            email: email,
+            createdAt: serverTimestamp()
+        });
+
+        // 2. Đăng xuất ngầm ngay lập tức để ép người dùng tự đăng nhập lại
+        await signOut(auth);
+        
+        // 3. Thông báo và chuyển về màn hình Đăng nhập
+        showToast("Tạo tài khoản thành công! Vui lòng đăng nhập."); 
+        document.getElementById("regEmailInput").value = "";
+        document.getElementById("regPasswordInput").value = "";
+        document.getElementById("switchToLogin").click();
+        
+        isRegistering = false;
+        document.getElementById("registerSubmitBtn").innerText = "Xác nhận Đăng ký";
+    } catch(e) { 
+        isRegistering = false;
+        document.getElementById("registerSubmitBtn").innerText = "Xác nhận Đăng ký";
+        showToast("Lỗi! Email đã tồn tại hoặc mật khẩu quá ngắn.", "error"); 
+    } 
+};
+
+document.getElementById("loginSubmitBtn").onclick = async () => { 
+    const email = document.getElementById("emailInput").value.trim();
+    const pass = document.getElementById("passwordInput").value.trim();
+    if(!email || !pass) return showToast("Vui lòng nhập đủ thông tin!", "error");
+    
+    document.getElementById("loginSubmitBtn").innerText = "Đang đăng nhập...";
+    
+    try { 
+        const res = await signInWithEmailAndPassword(auth, email, pass); 
+        await logSecurityAction(res.user.uid, "LOGIN", `Đăng nhập hệ thống`); 
+        showToast("Đăng nhập thành công!"); 
+        document.getElementById("loginSubmitBtn").innerText = "Đăng nhập";
+    } catch(e) { 
+        document.getElementById("loginSubmitBtn").innerText = "Đăng nhập";
+        showToast("Sai thông tin đăng nhập!", "error"); 
+    } 
+};
 
 document.getElementById("postBtn").onclick = async () => {
     const file = document.getElementById("imageInput").files[0]; if (!file || !currentUser) return showToast("Vui lòng chọn ảnh!", "error");
@@ -286,7 +391,8 @@ document.getElementById("postsGrid").addEventListener('click', async (e) => {
             } else { 
                 updateDoc(pRef, { likedBy: arrayUnion(currentUser.uid) }); icon.classList.add('icon-filled'); 
                 logSecurityAction(currentUser.uid, "LIKE_POST", `Đã thả tim bài viết ID: ${heartBtn.dataset.id}`);
-                if(pData.userId !== currentUser.uid) setDoc(doc(db, "notifications", `like_${heartBtn.dataset.id}_${currentUser.uid}`), { userId: pData.userId, fromUserId: currentUser.uid, fromUserName: currentUser.email.split('@')[0], type: 'like', postId: heartBtn.dataset.id, postImage: pData.image_url, timestamp: serverTimestamp(), isRead: false }); 
+                if(pData.userId !== currentUser.uid) setDoc(doc(db, "notifications", `like_${heartBtn.dataset.id}_${currentUser.uid}`), { receiverId: pData.userId, senderId: currentUser.uid, senderName: currentUser.email.split('@')[0], type: 'like', postId: heartBtn.dataset.id, postImage: pData.image_url, createdAt: serverTimestamp(), isRead: false }); 
+                if(pData.userId !== currentUser.uid) sendAppNotification(pData.userId, 'like', heartBtn.dataset.id);
             }
         } return;
     }
@@ -339,7 +445,7 @@ document.getElementById("postsGrid").addEventListener('click', async (e) => {
             } else { 
                 await updateDoc(pRef, { likedBy: arrayUnion(currentUser.uid) }); detailHeartBtn.classList.add('liked'); document.getElementById("detailLikes").innerText = parseInt(document.getElementById("detailLikes").innerText) + 1; 
                 logSecurityAction(currentUser.uid, "LIKE_POST", `Đã thả tim bài viết ID: ${currentInteractPostId}`);
-                if(currentPostData.userId !== currentUser.uid) await setDoc(doc(db, "notifications", `like_${currentInteractPostId}_${currentUser.uid}`), { userId: currentPostData.userId, fromUserId: currentUser.uid, fromUserName: currentUser.email.split('@')[0], type: 'like', postId: currentInteractPostId, postImage: currentPostData.image_url, timestamp: serverTimestamp(), isRead: false }); 
+                if(currentPostData.userId !== currentUser.uid) await setDoc(doc(db, "notifications", `like_${currentInteractPostId}_${currentUser.uid}`), { receiverId: currentPostData.userId, senderId: currentUser.uid, senderName: currentUser.email.split('@')[0], type: 'like', postId: currentInteractPostId, postImage: currentPostData.image_url, createdAt: serverTimestamp(), isRead: false }); 
             } 
         };
         document.getElementById("detailSaveBtn").onclick = () => { boardM.classList.add("active"); loadBoards(); };
@@ -396,21 +502,119 @@ document.getElementById("detailCommentList").addEventListener('click', async (e)
         const cId = actionBtn.dataset.id;
         if (actionBtn.dataset.action === "like-comment") {
             const cRef = doc(db, "football_posts", currentInteractPostId, "comments", cId); const cDoc = await getDoc(cRef);
-            if ((cDoc.data().likedBy||[]).includes(currentUser.uid)) { 
+            const cData = cDoc.data();
+            if ((cData.likedBy||[]).includes(currentUser.uid)) { 
                 await updateDoc(cRef, { likedBy: arrayRemove(currentUser.uid) }); 
                 logSecurityAction(currentUser.uid, "UNLIKE_COMMENT", `Đã gỡ tim bình luận ID: ${cId}`);
             } else { 
                 await updateDoc(cRef, { likedBy: arrayUnion(currentUser.uid) }); 
                 logSecurityAction(currentUser.uid, "LIKE_COMMENT", `Đã thả tim bình luận ID: ${cId}`);
+                // Bắn thông báo tim bình luận
+                if(cData.userId !== currentUser.uid) {
+                    await sendAppNotification(cData.userId, 'like_comment', currentInteractPostId, "đã thả tim bình luận của bạn.");
+                }
             }
-        } else if (actionBtn.dataset.action === "reply-comment") { replyingToCommentId = cId; const input = document.getElementById("detailCommentInput"); input.value = `@${actionBtn.dataset.name} `; input.focus(); }
+        } else if (actionBtn.dataset.action === "reply-comment") { 
+            replyingToCommentId = cId; 
+            const input = document.getElementById("detailCommentInput"); 
+            input.value = `@${actionBtn.dataset.name} `; 
+            input.focus(); 
+        }
     }
 });
 
 document.getElementById("detailSubmitCommentBtn").onclick = async () => { 
-    const t = document.getElementById("detailCommentInput").value; if(!t)return; document.getElementById("detailCommentInput").value = ""; 
-    await addDoc(collection(db, "football_posts", currentInteractPostId, "comments"), { text: t, userName: currentUser.email.split('@')[0], userId: currentUser.uid, replyTo: replyingToCommentId, timestamp: serverTimestamp() }); 
+    const t = document.getElementById("detailCommentInput").value.trim(); 
+    if(!t) return; 
+    document.getElementById("detailCommentInput").value = ""; 
+    
+    // Kiểm tra xem đây là bình luận trả lời (reply) hay bình luận gốc
+    let parentCommentUserId = null;
+    if (replyingToCommentId) {
+        const parentDoc = await getDoc(doc(db, "football_posts", currentInteractPostId, "comments", replyingToCommentId));
+        if (parentDoc.exists()) {
+            parentCommentUserId = parentDoc.data().userId;
+        }
+    }
+
+    await addDoc(collection(db, "football_posts", currentInteractPostId, "comments"), { 
+        text: t, 
+        userName: currentUser.email.split('@')[0], 
+        userId: currentUser.uid, 
+        replyTo: replyingToCommentId, 
+        timestamp: serverTimestamp() 
+    }); 
+    
+    // Gửi thông báo cho chủ bài viết nếu là comment mới
+    if(!replyingToCommentId && currentPostData && currentPostData.userId !== currentUser.uid) { 
+        await addDoc(collection(db, "notifications"), { 
+            receiverId: currentPostData.userId, 
+            senderId: currentUser.uid, 
+            senderName: currentUser.email.split('@')[0], 
+            type: 'comment', 
+            postId: currentInteractPostId, 
+            postImage: currentPostData.image_url, 
+            createdAt: serverTimestamp(), 
+            isRead: false 
+        }); 
+    }
+
+    // Gửi thông báo trả lời bình luận (reply_comment)
+    if(replyingToCommentId && parentCommentUserId) {
+        await sendAppNotification(parentCommentUserId, 'reply_comment', currentInteractPostId, "đã trả lời bình luận của bạn.");
+    }
+
+    // Quét tag tên @mention trong bình luận
+    await processMentions(t, currentInteractPostId);
+
     replyingToCommentId = null; 
     logSecurityAction(currentUser.uid, "ADD_COMMENT", `Đã bình luận vào bài viết ID: ${currentInteractPostId}`);
-    if(currentPostData && currentPostData.userId !== currentUser.uid) { await addDoc(collection(db, "notifications"), { userId: currentPostData.userId, fromUserId: currentUser.uid, fromUserName: currentUser.email.split('@')[0], type: 'comment', postId: currentInteractPostId, postImage: currentPostData.image_url, timestamp: serverTimestamp(), isRead: false }); }
 };
+
+// ==========================================
+// ĐỘNG CƠ BẮN THÔNG BÁO ĐA NĂNG
+// ==========================================
+async function sendAppNotification(receiverId, type, postId, extraData = "") {
+    if (!receiverId || receiverId === currentUser.uid) return; 
+
+    try {
+        await addDoc(collection(db, "notifications"), {
+            receiverId: receiverId, 
+            senderId: currentUser.uid, 
+            senderName: currentUser.email.split('@')[0], 
+            type: type, 
+            postId: postId,
+            content: extraData, 
+            isRead: false,
+            createdAt: serverTimestamp()
+        });
+    } catch (error) {
+        console.error("Lỗi gửi thông báo:", error);
+    }
+}
+
+// ==========================================
+// HỆ THỐNG QUÉT VÀ TAG TÊN BẠN BÈ
+// ==========================================
+async function processMentions(commentText, postId) {
+    const mentions = commentText.match(/@([a-zA-Z0-9_.-]+)/g);
+    if (!mentions) return;
+
+    const uniqueNames = [...new Set(mentions.map(m => m.substring(1)))];
+
+    for (const name of uniqueNames) {
+        try {
+            const usersRef = collection(db, "users");
+            const q = query(usersRef, where("username", "==", name)); 
+            const snap = await getDocs(q);
+            
+            if (!snap.empty) {
+                const receiverId = snap.docs[0].id; 
+                const snippet = commentText.length > 30 ? commentText.substring(0, 30) + "..." : commentText;
+                await sendAppNotification(receiverId, 'mention', postId, snippet);
+            }
+        } catch (error) {
+            console.log("Lỗi xử lý tag tên:", error);
+        }
+    }
+}

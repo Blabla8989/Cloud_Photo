@@ -152,16 +152,29 @@ function listenChatNotifications() {
             else if (data.status === 'accepted' && data.hasUnread && data.lastSenderId !== currentUser.uid) { badgeCount++; }
         });
 
+        // =========================================
+        // ÉP CHUÔNG ĐỎ PHẢI HIỆN RA BẰNG MỌI GIÁ
+        // =========================================
         let chatBadge = document.getElementById("chatBadge");
         if(!chatBadge) {
             const chatBtn = document.getElementById("chatBtn");
-            if(chatBtn) { chatBadge = document.createElement("span"); chatBadge.id = "chatBadge"; chatBadge.className = "noti-badge"; chatBadge.style.display = "none"; chatBtn.appendChild(chatBadge); }
+            if(chatBtn) { 
+                chatBadge = document.createElement("span"); 
+                chatBadge.id = "chatBadge"; 
+                chatBtn.appendChild(chatBadge); 
+            }
         }
         if(chatBadge) {
-            if(badgeCount > 0) { chatBadge.innerText = badgeCount; chatBadge.style.display = "flex"; } 
-            else { chatBadge.style.display = "none"; }
+            if(badgeCount > 0) { 
+                chatBadge.innerText = badgeCount; 
+                // Dùng setProperty với !important để đập tan mọi CSS cản trở
+                chatBadge.style.setProperty("display", "flex", "important"); 
+            } else { 
+                chatBadge.style.setProperty("display", "none", "important"); 
+            }
         }
 
+        // SẮP XẾP TIN MỚI NHẤT LÊN ĐẦU
         friendsArray.sort((a, b) => {
             const timeA = (a.lastUpdated || a.createdAt)?.toMillis() || 0;
             const timeB = (b.lastUpdated || b.createdAt)?.toMillis() || 0;
@@ -175,7 +188,7 @@ function listenChatNotifications() {
                 let html = "";
                 friendsArray.forEach(data => {
                     const friendId = data.users.find(id => id !== currentUser.uid);
-                    const friendName = data.userNames[friendId]; 
+                    const friendName = data.userNames[friendId] || "Người dùng"; 
                     let badge = '';
                     if (data.status === 'pending') {
                         if (data.requesterId === currentUser.uid) badge = `<span style="font-size:0.7rem; color:#f59e0b; margin-left:auto;">Đang chờ</span>`;
@@ -183,7 +196,7 @@ function listenChatNotifications() {
                     } else if (data.hasUnread && data.lastSenderId !== currentUser.uid) {
                         badge = `<div style="width:10px; height:10px; background:#e60023; border-radius:50%; margin-left:auto;"></div>`;
                     }
-                    html += `<div class="friend-item ${currentActiveChatId === data.id ? 'active' : ''}" style="${currentActiveChatId === data.id ? 'background: var(--hover-bg);' : ''}" onclick="openChatRoom('${data.id}', '${friendName}')"><div class="friend-avatar">${friendName.charAt(0).toUpperCase()}</div><span class="friend-name" style="${(data.hasUnread && data.lastSenderId !== currentUser.uid) ? 'font-weight:bold;' : ''}">${friendName}</span>${badge}</div>`;
+                    html += `<div class="friend-item ${currentActiveChatId === data.id ? 'active' : ''}" onclick="openChatRoom('${data.id}', '${friendName}')"><div class="friend-avatar">${friendName.charAt(0).toUpperCase()}</div><span class="friend-name" style="${(data.hasUnread && data.lastSenderId !== currentUser.uid) ? 'font-weight:bold;' : ''}">${friendName}</span>${badge}</div>`;
                 });
                 listEl.innerHTML = html;
             }
