@@ -35,8 +35,6 @@ themeBtn.onclick = () => { const theme = document.documentElement.getAttribute("
 
 lucide.createIcons(); const dot = document.getElementById("cursorDot"), outline = document.getElementById("cursorOutline");
 window.addEventListener('mousemove', (e) => { dot.style.left = `${e.clientX}px`; dot.style.top = `${e.clientY}px`; outline.animate({ left: `${e.clientX}px`, top: `${e.clientY}px` }, { duration: 300, fill: "forwards" }); });
-document.addEventListener('mouseover', (e) => { if(e.target.closest('button, .photo-card, input, .lucide, .tab-btn, .close-modal, .noti-item, .notification-wrapper, #detailImageContainer, .friend-item, .comment-action-btn')) document.body.classList.add('hovering'); });
-document.addEventListener('mouseout', (e) => { if(e.target.closest('button, .photo-card, input, .lucide, .tab-btn, .close-modal, .noti-item, .notification-wrapper, #detailImageContainer, .friend-item, .comment-action-btn')) document.body.classList.remove('hovering'); });
 
 document.getElementById("detailCommentInput").addEventListener('keydown', e => { if(e.key === 'Enter') document.getElementById("detailSubmitCommentBtn").click(); });
 document.getElementById("chatInput").addEventListener('keydown', e => { if(e.key === 'Enter') document.getElementById("chatSendBtn").click(); });
@@ -50,6 +48,8 @@ document.getElementById("showEditProfileBtn").onclick = () => editM.classList.ad
 document.getElementById("closeBoard").onclick = () => boardM.classList.remove("active"); 
 document.getElementById("notiBellBtn").onclick = () => notiM.classList.add("active"); document.getElementById("closeNoti").onclick = () => notiM.classList.remove("active");
 document.getElementById("closeChat").onclick = () => chatM.classList.remove("active"); 
+document.getElementById("chatBtn").onclick = () => { chatM.classList.add("active"); };
+
 document.getElementById("closePostDetail").onclick = () => { detailM.classList.remove("active"); document.querySelector('.post-detail-content').style.boxShadow = ''; };
 
 let currentUser = null, currentInteractPostId = null, currentTabMode = 'my-posts', currentBoardId = null, currentPostData = null;
@@ -67,24 +67,6 @@ document.getElementById("searchInput").addEventListener('input', (e) => {
     let searchTerms = [term]; for (let key in dictionary) { if (term.includes(key) || dictionary[key].some(k => term.includes(k))) searchTerms.push(key, ...dictionary[key]); }
     document.querySelectorAll('.photo-card-wrap').forEach(card => { let searchableText = card.getAttribute('data-search') || '', isMatch = searchTerms.some(t => searchableText.includes(t)); card.style.display = (isMatch || term === "") ? 'inline-block' : 'none'; });
 });
-
-document.getElementById("chatBtn").onclick = () => { chatM.classList.add("active"); loadFriendList(); };
-async function loadFriendList() {
-    const listEl = document.getElementById("friendList"); const s = await getDocs(query(collection(db, "friends_chat"), where("users", "array-contains", currentUser.uid)));
-    if (s.empty) { listEl.innerHTML = "<p style='padding:20px; color:var(--text-muted); text-align:center;'>Chưa có bạn bè nào.</p>"; return; }
-    let html = ""; s.forEach(d => { 
-        const data = d.data(); const friendId = data.users.find(id => id !== currentUser.uid); const friendName = data.userNames[friendId]; 
-        let badge = '';
-        if (data.status === 'pending') {
-            if (data.requesterId === currentUser.uid) badge = `<span style="font-size:0.7rem; color:#f59e0b; margin-left:auto;">Đang chờ</span>`;
-            else badge = `<span style="font-size:0.7rem; color:#e60023; margin-left:auto; font-weight:bold;">Có yêu cầu</span>`;
-        } else if (data.hasUnread && data.lastSenderId !== currentUser.uid) {
-            badge = `<div style="width:10px; height:10px; background:#e60023; border-radius:50%; margin-left:auto;"></div>`;
-        }
-        html += `<div class="friend-item" onclick="openChatRoom('${d.id}', '${friendName}')"><div class="friend-avatar">${friendName.charAt(0).toUpperCase()}</div><span class="friend-name" style="${(data.hasUnread && data.lastSenderId !== currentUser.uid) ? 'font-weight:bold;' : ''}">${friendName}</span>${badge}</div>`; 
-    });
-    listEl.innerHTML = html;
-}
 
 function updateChatState() {
     const chatInput = document.getElementById("chatInput"); const chatSendBtn = document.getElementById("chatSendBtn"); const inputArea = document.querySelector(".chat-input-area");
@@ -105,17 +87,14 @@ window.openChatRoom = (chatId, friendName) => {
         const room = docSnap.data(); if (!room) return;
         chatCurrentStatus = room.status; chatCurrentRequester = room.requesterId;
         
-        // TẮT CỜ UNREAD KHI MỞ PHÒNG CHAT
-        if (room.hasUnread && room.lastSenderId !== currentUser.uid) {
-            updateDoc(doc(db, "friends_chat", chatId), { hasUnread: false });
-        }
+        if (room.hasUnread && room.lastSenderId !== currentUser.uid) { updateDoc(doc(db, "friends_chat", chatId), { hasUnread: false }); }
 
         const headerArea = document.getElementById("chatActiveUser");
         if (room.status === 'pending') {
             if (room.requesterId === currentUser.uid) { headerArea.innerHTML = `Đang chat với: ${friendName} <span style="font-size:0.8rem;color:#f59e0b;font-weight:normal;">(Chờ chấp nhận)</span>`; } 
             else {
                 headerArea.innerHTML = `Đang chat với: ${friendName} <button id="acceptChatBtn" class="btn btn-primary small-btn" style="margin-left:10px; padding:4px 12px; font-size:0.8rem;">Chấp nhận</button>`;
-                document.getElementById("acceptChatBtn").onclick = async () => { await updateDoc(doc(db, "friends_chat", chatId), { status: 'accepted' }); showToast("Đã trở thành bạn bè!"); loadFriendList(); logSecurityAction(currentUser.uid, "ACCEPT_FRIEND", `Đã chấp nhận kết bạn`); };
+                document.getElementById("acceptChatBtn").onclick = async () => { await updateDoc(doc(db, "friends_chat", chatId), { status: 'accepted', lastUpdated: serverTimestamp() }); showToast("Đã trở thành bạn bè!"); logSecurityAction(currentUser.uid, "ACCEPT_FRIEND", `Đã chấp nhận kết bạn từ ${friendName}`); };
             }
         } else { headerArea.innerHTML = `Đang chat với: ${friendName}`; }
         updateChatState();
@@ -140,10 +119,66 @@ document.getElementById("chatSendBtn").onclick = async () => {
     const text = document.getElementById("chatInput").value.trim(); 
     if(!text || !currentActiveChatId) return; 
     document.getElementById("chatInput").value = ""; 
-    
     await addDoc(collection(db, "friends_chat", currentActiveChatId, "messages"), { senderId: currentUser.uid, text: text, timestamp: serverTimestamp() }); 
-    await updateDoc(doc(db, "friends_chat", currentActiveChatId), { hasUnread: true, lastSenderId: currentUser.uid });
+    await updateDoc(doc(db, "friends_chat", currentActiveChatId), { hasUnread: true, lastSenderId: currentUser.uid, lastUpdated: serverTimestamp() });
 };
+
+// ==============================================================
+// BỘ QUẢN LÝ TIN NHẮN REAL-TIME (SẮP XẾP LÊN TOP & CHUÔNG ĐỎ)
+// ==============================================================
+let chatNotiUnsub = null;
+function listenChatNotifications() {
+    if(chatNotiUnsub) chatNotiUnsub();
+    chatNotiUnsub = onSnapshot(query(collection(db, "friends_chat"), where("users", "array-contains", currentUser.uid)), (snap) => {
+        let badgeCount = 0; let friendsArray = [];
+        
+        snap.forEach(d => { 
+            const data = d.data(); 
+            friendsArray.push({ id: d.id, ...data });
+            if (data.status === 'pending' && data.requesterId !== currentUser.uid) { badgeCount++; } 
+            else if (data.status === 'accepted' && data.hasUnread && data.lastSenderId !== currentUser.uid) { badgeCount++; }
+        });
+
+        // TỰ ĐỘNG CẤY THÔNG BÁO VÀO NÚT CHAT BÊN NGOÀI
+        let chatBadge = document.getElementById("chatBadge");
+        if(!chatBadge) {
+            const chatBtn = document.getElementById("chatBtn");
+            if(chatBtn) { chatBadge = document.createElement("span"); chatBadge.id = "chatBadge"; chatBadge.className = "noti-badge"; chatBadge.style.display = "none"; chatBtn.appendChild(chatBadge); }
+        }
+        if(chatBadge) {
+            if(badgeCount > 0) { chatBadge.innerText = badgeCount; chatBadge.style.display = "flex"; } 
+            else { chatBadge.style.display = "none"; }
+        }
+
+        // SẮP XẾP LẠI DANH SÁCH BẠN BÈ (TIN MỚI NHẤT LÊN ĐẦU)
+        friendsArray.sort((a, b) => {
+            const timeA = (a.lastUpdated || a.createdAt)?.toMillis() || 0;
+            const timeB = (b.lastUpdated || b.createdAt)?.toMillis() || 0;
+            return timeB - timeA;
+        });
+
+        const listEl = document.getElementById("friendList");
+        if(listEl) {
+            if (friendsArray.length === 0) { listEl.innerHTML = "<p style='padding:20px; color:var(--text-muted); text-align:center;'>Chưa có bạn bè nào.</p>"; } 
+            else {
+                let html = "";
+                friendsArray.forEach(data => {
+                    const friendId = data.users.find(id => id !== currentUser.uid);
+                    const friendName = data.userNames[friendId]; 
+                    let badge = '';
+                    if (data.status === 'pending') {
+                        if (data.requesterId === currentUser.uid) badge = `<span style="font-size:0.7rem; color:#f59e0b; margin-left:auto;">Đang chờ</span>`;
+                        else badge = `<span style="font-size:0.7rem; color:#e60023; margin-left:auto; font-weight:bold;">Có yêu cầu</span>`;
+                    } else if (data.hasUnread && data.lastSenderId !== currentUser.uid) {
+                        badge = `<div style="width:10px; height:10px; background:#e60023; border-radius:50%; margin-left:auto;"></div>`;
+                    }
+                    html += `<div class="friend-item ${currentActiveChatId === data.id ? 'active' : ''}" style="${currentActiveChatId === data.id ? 'background: var(--hover-bg);' : ''}" onclick="openChatRoom('${data.id}', '${friendName}')"><div class="friend-avatar">${friendName.charAt(0).toUpperCase()}</div><span class="friend-name" style="${(data.hasUnread && data.lastSenderId !== currentUser.uid) ? 'font-weight:bold;' : ''}">${friendName}</span>${badge}</div>`;
+                });
+                listEl.innerHTML = html;
+            }
+        }
+    });
+}
 
 let unsubNoti = null;
 function listenNotifications() {
@@ -153,24 +188,6 @@ function listenNotifications() {
         if (snap.empty) { notiList.innerHTML = "<p class='text-muted' style='text-align:center; padding: 30px;'>Không có thông báo nào.</p>"; notiBadge.style.display = "none"; return; }
         snap.forEach(docSnap => { const n = docSnap.data(); if (!n.isRead) unreadCount++; const text = n.type === 'like' ? 'đã thả tim bài viết ❤️' : 'đã bình luận về bài viết 💬'; const timeStr = timeAgo(n.timestamp); html += `<div class="noti-item ${n.isRead ? '' : 'unread'}" data-id="${docSnap.id}" data-post-id="${n.postId}"><img src="${n.postImage}"><div class="noti-item-content"><strong>${n.fromUserName}</strong> ${text}<span class="noti-time">${timeStr}</span></div></div>`; });
         notiList.innerHTML = html; if(unreadCount > 0) { notiBadge.innerText = unreadCount; notiBadge.style.display = "flex"; } else { notiBadge.style.display = "none"; }
-    });
-}
-
-let chatNotiUnsub = null;
-function listenChatNotifications() {
-    if(chatNotiUnsub) chatNotiUnsub();
-    chatNotiUnsub = onSnapshot(query(collection(db, "friends_chat"), where("users", "array-contains", currentUser.uid)), (snap) => {
-        let badgeCount = 0; 
-        snap.forEach(d => { 
-            const data = d.data(); 
-            if (data.status === 'pending' && data.requesterId !== currentUser.uid) { badgeCount++; } 
-            else if (data.status === 'accepted' && data.hasUnread && data.lastSenderId !== currentUser.uid) { badgeCount++; }
-        });
-        const chatBadge = document.getElementById("chatBadge");
-        if(chatBadge) { 
-            if(badgeCount > 0) { chatBadge.innerText = badgeCount; chatBadge.style.display = "flex"; } 
-            else { chatBadge.style.display = "none"; } 
-        }
     });
 }
 
@@ -214,7 +231,7 @@ async function loadProfileTab(tabName) {
         if (logs.length === 0) { grid.innerHTML = "<p style='text-align:center; width:100%; color:var(--text-muted); margin-top:20px;'>Chưa có nhật ký hoạt động.</p>"; return; }
         let logHtml = '<div class="log-list">'; 
         logs.forEach(log => { 
-            const timeStr = log.timestamp ? new Date(log.timestamp.toDate()).toLocaleString('vi-VN') : 'Vừa xong'; let typeClass = ''; 
+            const timeStr = timeAgo(log.timestamp); let typeClass = ''; 
             if(log.action === 'LOGIN' || log.action === 'REGISTER') typeClass = 'login'; 
             if(log.action.includes('DELETE') || log.action.includes('UNLIKE') || log.action.includes('REMOVE')) typeClass = 'delete'; 
             if(log.action.includes('UPDATE') || log.action.includes('LIKE') || log.action.includes('SAVE')) typeClass = 'update'; 
@@ -232,6 +249,20 @@ document.querySelectorAll('.tab-btn').forEach(btn => btn.onclick = (e) => { docu
 
 window.openBoard = async (bId, bName) => { currentTabMode = 'inside-board'; currentBoardId = bId; document.getElementById("boardHeader").style.display = "flex"; document.getElementById("currentBoardName").innerText = bName; const pinSnaps = await getDocs(query(collection(db, "saved_pins"), where("boardId", "==", bId))); if (pinSnaps.empty) { document.getElementById("profileGrid").innerHTML = "<p style='text-align:center; width:100%; color:var(--text-muted); margin-top:20px;'>Bảng trống.</p>"; return; } const postDocs = await Promise.all(pinSnaps.docs.map(pin => getDoc(doc(db, "football_posts", pin.data().postId)))); renderGrid(postDocs, document.getElementById("profileGrid")); };
 document.getElementById("backToBoardsBtn").onclick = () => document.querySelector('.tab-btn[data-tab="my-boards"]').click();
+
+window.addEventListener('scroll', function(e) {
+    let target = e.target;
+    if (target === document) target = document.documentElement;
+    if (!target || typeof target.scrollTop === 'undefined') return;
+
+    const scrollTop = target.scrollTop || window.scrollY || 0;
+    const scrollHeight = target.scrollHeight || document.documentElement.scrollHeight || 0;
+    const clientHeight = target.clientHeight || window.innerHeight || 0;
+
+    if (scrollHeight > clientHeight && (scrollTop + clientHeight) >= (scrollHeight - 600) && !isFetching) { 
+        // Logic cuộn tải thêm không dùng ở trang profile
+    } 
+}, true);
 
 document.getElementById("profileGrid").addEventListener('click', async (e) => {
     const folder = e.target.closest('.board-folder'); if (folder) { window.openBoard(folder.dataset.boardId, folder.dataset.boardName); return; }
@@ -268,13 +299,13 @@ document.getElementById("profileGrid").addEventListener('click', async (e) => {
                     if (data.requesterId === currentUser.uid) { addFriendBtn.innerHTML = `<i data-lucide="clock" style="width:14px;"></i> Đã gửi yêu cầu`; addFriendBtn.onclick = null; }
                     else { 
                         addFriendBtn.innerHTML = `<i data-lucide="check-circle" style="width:14px;"></i> Chấp nhận`; 
-                        addFriendBtn.onclick = async () => { await updateDoc(doc(db, "friends_chat", chatId), { status: 'accepted' }); addFriendBtn.innerHTML = `<i data-lucide="check" style="width:14px;"></i> Bạn bè`; showToast("Đã kết bạn!"); logSecurityAction(currentUser.uid, "ACCEPT_FRIEND", `Đã chấp nhận kết bạn`); };
+                        addFriendBtn.onclick = async () => { await updateDoc(doc(db, "friends_chat", chatId), { status: 'accepted', lastUpdated: serverTimestamp() }); addFriendBtn.innerHTML = `<i data-lucide="check" style="width:14px;"></i> Bạn bè`; showToast("Đã kết bạn!"); };
                     }
                 }
             } else {
                 addFriendBtn.innerHTML = `<i data-lucide="user-plus" style="width:14px;"></i> Kết bạn`;
                 addFriendBtn.onclick = async () => { 
-                    await setDoc(doc(db, "friends_chat", chatId), { users: [currentUser.uid, currentPostData.userId], userNames: { [currentUser.uid]: currentUser.email.split('@')[0], [currentPostData.userId]: currentPostData.userName }, status: 'pending', requesterId: currentUser.uid, createdAt: serverTimestamp() }); 
+                    await setDoc(doc(db, "friends_chat", chatId), { users: [currentUser.uid, currentPostData.userId], userNames: { [currentUser.uid]: currentUser.email.split('@')[0], [currentPostData.userId]: currentPostData.userName }, status: 'pending', requesterId: currentUser.uid, createdAt: serverTimestamp(), lastUpdated: serverTimestamp() }); 
                     addFriendBtn.innerHTML = `<i data-lucide="clock" style="width:14px;"></i> Đã gửi yêu cầu`; showToast("Đã gửi yêu cầu kết bạn!"); logSecurityAction(currentUser.uid, "ADD_FRIEND", `Gửi yêu cầu kết bạn tới ${currentPostData.userName}`);
                 };
             }
