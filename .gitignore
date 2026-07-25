@@ -1,0 +1,9 @@
+# Bảo mật khóa và cấu hình cục bộ
+.env
+.netlify
+
+# Thư mục chứa gói thư viện (Netlify sẽ tự tải lại khi build)
+node_modules/
+
+# Hệ thống
+.DS_Store
